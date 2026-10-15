@@ -89,13 +89,13 @@
 
 **Interfaces:** `Repository(dsn: str, *, schema: str="public")`；`claim_due(now: datetime, *, limit: int=1, lease_seconds: int=300) -> list[Lease]`；`commit_source(lease: Lease, result: CollectionResult, *, expected_version: int, now: datetime) -> dict`；`enqueue(job_key: str, task: str, due_at: datetime, payload: dict) -> bool`；`finish_job(lease: Lease, result: dict, now: datetime) -> None`；`fail_job(lease: Lease, error: dict, retry_at: datetime|None, now: datetime) -> None`；`get_source_state(source_instance: str) -> SourceSnapshot`。
 
-- [ ] **Step 1: 准备隔离环境。** 按 Neon branch 工作流在指定项目查找或建立 `dev-free-platform`，记录 branch ID/host；连接只存忽略的配置。建立 reader/writer/migrator 角色，复用现有项目。
-- [ ] **Step 2: 写安全测试入口。** 显式 RADAR_TEST_DATABASE_URL 的 host 必须匹配 RADAR_TEST_ALLOWED_HOST；已知生产 endpoint `ep-silent-tooth-aq1rgb46` 及 pooler 变体必须拒绝。每次测试仅建立/清理自身 `radar_test_<uuid>` schema。
-- [ ] **Step 3: 写失败用例。** `test_migrations_idempotent_and_checksums_match`、`test_repeat_slot_does_not_duplicate`、`test_next_slot_keeps_observation`、`test_failed_commit_keeps_previous_snapshot`、`test_two_workers_cannot_claim_same_job`、`test_expired_lease_cannot_commit`；词/证据/快照/成功记录全成或全不成。
-- [ ] **Step 4: 运行** `python -m pytest -q tests/platform_integration/test_migrations.py tests/platform_integration/test_repository.py`。未配置隔离库明确 skip，不能计为关卡通过。
-- [ ] **Step 5: 实现设计中的九张表、索引、约束和事务。** reader 仅 SELECT，writer 仅新表 DML；迁移单独直接连接。commit_source 同时完成来源job和run，拒绝过期lease；基线中未发现实体只存source_state。提供 `python -m radar_platform migrate --database-env RADAR_MIGRATION_DATABASE_URL`，checksum 不符失败，运行时不建表。按设计固定环境变量命名，使用 `uv pip compile requirements-platform.in --output-file requirements-platform.txt` 锁定依赖。
-- [ ] **Step 6: 在隔离分支跑全测试。** reader INSERT 被数据库拒绝，旧 Trends 表结构/行数不变。记录真实结果。
-- [ ] **Step 7: 提交** `feat: persist platform state and jobs in Neon`。
+- [x] **Step 1: 准备隔离环境。** 按 Neon branch 工作流在指定项目查找或建立 `dev-free-platform`，记录 branch ID/host；连接只存忽略的配置。建立 reader/writer/migrator 角色，复用现有项目。
+- [x] **Step 2: 写安全测试入口。** 显式 RADAR_TEST_DATABASE_URL 的 host 必须匹配 RADAR_TEST_ALLOWED_HOST；已知生产 endpoint `ep-silent-tooth-aq1rgb46` 及 pooler 变体必须拒绝。每次测试仅建立/清理自身 `radar_test_<uuid>` schema。
+- [x] **Step 3: 写失败用例。** `test_migrations_idempotent_and_checksums_match`、`test_repeat_slot_does_not_duplicate`、`test_next_slot_keeps_observation`、`test_failed_commit_keeps_previous_snapshot`、`test_two_workers_cannot_claim_same_job`、`test_expired_lease_cannot_commit`；词/证据/快照/成功记录全成或全不成。
+- [x] **Step 4: 运行** `python -m pytest -q tests/platform_integration/test_migrations.py tests/platform_integration/test_repository.py`。未配置隔离库明确 skip，不能计为关卡通过。
+- [x] **Step 5: 实现设计中的九张表、索引、约束和事务。** reader 仅 SELECT，writer 仅新表 DML；迁移单独直接连接。commit_source 同时完成来源job和run，拒绝过期lease；基线中未发现实体只存source_state。提供 `python -m radar_platform migrate --database-env RADAR_MIGRATION_DATABASE_URL`，checksum 不符失败，运行时不建表。按设计固定环境变量命名，使用 `uv pip compile requirements-platform.in --output-file requirements-platform.txt` 锁定依赖。
+- [x] **Step 6: 在隔离分支跑全测试。** reader INSERT 被数据库拒绝，旧 Trends 表结构/行数不变。记录真实结果。
+- [x] **Step 7: 提交** `feat: persist platform state and jobs in Neon`。
 
 ## Task 3：GitHub 与 Hugging Face 真实入库
 
