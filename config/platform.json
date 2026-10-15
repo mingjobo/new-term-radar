@@ -9,7 +9,12 @@
     "github:breakout": {
       "provider": "github",
       "enabled": true,
-      "allowed_hosts": ["api.github.com", "github.com"]
+      "allowed_hosts": ["api.github.com", "github.com"],
+      "window_days": 14,
+      "min_stars": 300,
+      "velocity_min": 200,
+      "delta_min": 400,
+      "pages": 2
     },
     "hf:models": {
       "provider": "huggingface",

@@ -241,6 +241,9 @@ class Repository:
 
     def finish_job(self, lease: Lease, result: dict[str, Any], now: datetime) -> None:
         _aware(now, "now")
+        status = str(result.get("status", "ok"))
+        if status not in {"ok", "off", "incomplete", "skipped"}:
+            raise ValueError(f"invalid finished job status: {status}")
         with connect(self.dsn, schema=self.schema) as connection:
             row = connection.execute(
                 "SELECT status, lease_token, lease_expires_at FROM radar_jobs WHERE job_key = %s FOR UPDATE",
@@ -249,10 +252,20 @@ class Repository:
             self._assert_lease(row, lease, now)
             connection.execute(
                 """
-                INSERT INTO radar_runs (id, job_key, lease_token, status, result, started_at, finished_at)
-                VALUES (%s, %s, %s, 'ok', %s, %s, %s)
+                INSERT INTO radar_runs
+                    (id, job_key, lease_token, source_instance, status, result, started_at, finished_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                 """,
-                (uuid.uuid4(), lease.job_key, lease.lease_token, Jsonb(result), lease.scheduled_for, now),
+                (
+                    uuid.uuid4(),
+                    lease.job_key,
+                    lease.lease_token,
+                    lease.payload.get("source_instance"),
+                    status,
+                    Jsonb(result),
+                    lease.scheduled_for,
+                    now,
+                ),
             )
             connection.execute(
                 """

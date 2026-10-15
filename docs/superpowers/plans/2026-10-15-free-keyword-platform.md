@@ -103,13 +103,13 @@
 
 **Interfaces:** 每个 adapter 提供 `collect(cfg: PlatformConfig, previous: SourceSnapshot, now: datetime, http: HttpClient, *, source_instance: str) -> CollectionResult`；实例为 `github:breakout`、`hf:models`、`hf:spaces`，由 lease.payload 传入。`run_source(repo: Repository, lease: Lease, cfg: PlatformConfig, now: datetime, http: HttpClient) -> dict` 负责采集/事务/失败记录。
 
-- [ ] **Step 1: 写 HF fixture 测试。** 首次只建 top100 基线；第二轮进入 top50 才生词；同周期重跑不增词；空列表或格式变化不覆盖基线；量化版本、model/demo 按规范实体及显式别名处理。
-- [ ] **Step 2: 写 GitHub 测试。** 14 天/300 stars/200 平均每天或约 24h +400；8h +200 不等于日增。保留 48h 原始计数，找距当前 20–28h 最近观测，窗口不足不用 delta；保存 repo ID、URL、真实时间。
-- [ ] **Step 3: 运行** `python -m pytest -q tests/platform/test_github.py tests/platform/test_huggingface.py tests/platform/test_runner.py`，确认失败。
-- [ ] **Step 4: 实现适配器。** 复用上游纯算法，修正日增窗口；所有请求走 HttpClient。保留完整来源观测及其是否为新候选，供复查用；失败不更新 last_success。
-- [ ] **Step 5: 跑离线/隔离库测试。** 注入采集成功但写库失败，重试仍产出相同词和证据；其他来源正常提交。
-- [ ] **Step 6: 真实探测。** `python scripts/platform_probe.py --sources github,hf --max-requests 8 --out artifacts/probes/free-sources.json` 默认只验证结构；检查后用显式 `--write-test-db` 入隔离库。同次 HF 重跑只证明幂等，真实新词差分另待后续观测。
-- [ ] **Step 7: 提交** `feat: ingest free GitHub and Hugging Face signals`。
+- [x] **Step 1: 写 HF fixture 测试。** 首次只建 top100 基线；第二轮进入 top50 才生词；同周期重跑不增词；空列表或格式变化不覆盖基线；量化版本、model/demo 按规范实体及显式别名处理。
+- [x] **Step 2: 写 GitHub 测试。** 14 天/300 stars/200 平均每天或约 24h +400；8h +200 不等于日增。保留 48h 原始计数，找距当前 20–28h 最近观测，窗口不足不用 delta；保存 repo ID、URL、真实时间。
+- [x] **Step 3: 运行** `python -m pytest -q tests/platform/test_github.py tests/platform/test_huggingface.py tests/platform/test_runner.py`，确认失败。
+- [x] **Step 4: 实现适配器。** 复用上游纯算法，修正日增窗口；所有请求走 HttpClient。保留完整来源观测及其是否为新候选，供复查用；失败不更新 last_success。
+- [x] **Step 5: 跑离线/隔离库测试。** 注入采集成功但写库失败，重试仍产出相同词和证据；其他来源正常提交。
+- [x] **Step 6: 真实探测。** `python scripts/platform_probe.py --sources github,hf --max-requests 8 --out artifacts/probes/free-sources.json` 默认只验证结构；检查后用显式 `--write-test-db` 入隔离库。同次 HF 重跑只证明幂等，真实新词差分另待后续观测。
+- [x] **Step 7: 提交** `feat: ingest free GitHub and Hugging Face signals`。
 
 ## Task 4：最小只读网页
 
