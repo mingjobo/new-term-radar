@@ -1,5 +1,7 @@
 # new-term-radar
 
+> This fork is being developed into a free, personal keyword research platform. See [our fork plan and development guide](docs/FORK.md). The upstream documentation below describes the original project, including its optional paid features.
+
 [中文说明](README.zh-CN.md)
 
 A daily report of the names that are starting to surge in AI: new models, products, tools and repos, caught where they are said first, before they show up in keyword tools.
