@@ -76,12 +76,12 @@
 - `Lease(job_key, lease_token, task, payload, scheduled_for)`；`RelationInput(name_key, generic_key, phrase, language, evidence_id, quote, rule_version)`。
 - `PlatformConfig(sources, roots, aliases, hf_task_map, budgets, timezone)`；`HttpResponse(status, headers, body)`；`RunSummary(status, jobs, new_terms, requests, errors)`。配置不存密码。
 
-- [ ] **Step 1: 写失败测试。** 85 词根保持原顺序/无重复；C++ 与 C#、model 2.1 与 model 2.2 不合并；两个同名不同 repo 生成不同实体键；只有 aliases 显式配置才合并。
-- [ ] **Step 2: 测免费边界。** paid provider 配置及 AIsa/GoAnyAPI 请求必须拒绝；设置付费环境变量不增加 collector。第 201 个 tick 请求 / 第 61 个来源请求触发预算异常；私有地址和越界重定向被拒绝。
-- [ ] **Step 3: 运行** `python -m pytest -q tests/platform/test_config.py tests/platform/test_normalize.py tests/platform/test_http.py`，确认新模块缺失导致失败。
-- [ ] **Step 4: 实现。** 仅从旧 `app/config.py` 导出 ROOT_KEYWORDS 并记旧文件摘要；默认 GitHub/HF on、GSC off、sitemap 待探测；提供 `python -m radar_platform config-check --config config/platform.json`。
-- [ ] **Step 5: 重跑新测试和上游回归，预期全过。** config-check 只输出免费来源、预算和时区。
-- [ ] **Step 6: 提交** `feat: add isolated free platform contracts and config`。
+- [x] **Step 1: 写失败测试。** 85 词根保持原顺序/无重复；C++ 与 C#、model 2.1 与 model 2.2 不合并；两个同名不同 repo 生成不同实体键；只有 aliases 显式配置才合并。
+- [x] **Step 2: 测免费边界。** paid provider 配置及 AIsa/GoAnyAPI 请求必须拒绝；设置付费环境变量不增加 collector。第 201 个 tick 请求 / 第 61 个来源请求触发预算异常；私有地址和越界重定向被拒绝。
+- [x] **Step 3: 运行** `python -m pytest -q tests/platform/test_config.py tests/platform/test_normalize.py tests/platform/test_http.py`，确认新模块缺失导致失败。
+- [x] **Step 4: 实现。** 仅从旧 `app/config.py` 导出 ROOT_KEYWORDS 并记旧文件摘要；默认 GitHub/HF on、GSC off、sitemap 待探测；提供 `python -m radar_platform config-check --config config/platform.json`。
+- [x] **Step 5: 重跑新测试和上游回归，预期全过。** config-check 只输出免费来源、预算和时区。
+- [x] **Step 6: 提交** `feat: add isolated free platform contracts and config`。
 
 ## Task 2：隔离 Neon、迁移与原子入库
 

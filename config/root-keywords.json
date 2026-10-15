@@ -1,0 +1,18 @@
+{
+  "source": "legacy keyword-detective/app/config.py",
+  "source_sha256": "0dc582c0767ee167019f23b3bbf751b73f98cd458a88fad3c6a0f6df9452cabf",
+  "roots": [
+    "translator", "generator", "example", "convert", "online", "downloader", "maker", "creator",
+    "editor", "processor", "designer", "compiler", "analyzer", "evaluator", "sender", "receiver",
+    "interpreter", "uploader", "calculator", "sample", "template", "format", "builder", "scheme",
+    "pattern", "checker", "detector", "scraper", "manager", "explorer", "dashboard", "planner",
+    "tracker", "recorder", "optimizer", "scheduler", "converter", "viewer", "extractor", "monitor",
+    "notifier", "verifier", "simulator", "assistant", "constructor", "comparator", "navigator", "syncer",
+    "connector", "cataloger", "responder", "api", "automation", "seo", "resume", "analysis", "code",
+    "video", "pdf", "scanner", "email", "document", "website", "prompt", "cloud", "image", "text",
+    "marketing", "security", "analytics", "visualization", "governance", "form", "chat", "enterprise",
+    "audio", "privacy", "monitoring", "hr", "gpt", "content", "cybersecurity", "business", "affiliate",
+    "source"
+  ]
+}
+

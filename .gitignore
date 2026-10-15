@@ -9,7 +9,10 @@ __pycache__/
 .pytest_cache/
 .venv/
 .env
+.env.*
 *.egg-info/
 build/
 dist/
 .DS_Store
+.vercel/
+artifacts/

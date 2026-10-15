@@ -1,0 +1,44 @@
+{
+  "timezone": "Asia/Shanghai",
+  "files": {
+    "roots": "root-keywords.json",
+    "aliases": "aliases.json",
+    "hf_task_map": "hf-task-map.json"
+  },
+  "sources": {
+    "github:breakout": {
+      "provider": "github",
+      "enabled": true,
+      "allowed_hosts": ["api.github.com", "github.com"]
+    },
+    "hf:models": {
+      "provider": "huggingface",
+      "enabled": true,
+      "allowed_hosts": ["huggingface.co"]
+    },
+    "hf:spaces": {
+      "provider": "huggingface",
+      "enabled": true,
+      "allowed_hosts": ["huggingface.co"]
+    },
+    "gsc": {
+      "provider": "gsc",
+      "enabled": false,
+      "mode": "off"
+    },
+    "sitemap": {
+      "provider": "sitemap",
+      "enabled": false,
+      "mode": "probe"
+    }
+  },
+  "budgets": {
+    "tick_requests": 200,
+    "source_requests": 60,
+    "tick_seconds": 720,
+    "source_seconds": 180,
+    "request_timeout_seconds": 30,
+    "lease_seconds": 300
+  }
+}
+
