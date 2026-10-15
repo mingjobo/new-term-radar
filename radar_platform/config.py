@@ -101,4 +101,3 @@ def load_config(path: Path) -> PlatformConfig:
         timezone=timezone_name,
         legacy_roots_sha256=str(roots_doc.get("source_sha256", "")),
     )
-

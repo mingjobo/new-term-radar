@@ -8,4 +8,3 @@ import pytest
 @pytest.fixture
 def observed_at() -> datetime:
     return datetime(2026, 10, 15, 0, 0, tzinfo=timezone.utc)
-

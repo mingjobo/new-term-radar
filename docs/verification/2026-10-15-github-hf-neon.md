@@ -46,4 +46,3 @@ The same probe was run with explicit `--write-test-db` and the development write
 Repeating in the same probe slot made zero HTTP requests and returned `already_processed` for all three source instances. Database counts remained `terms=45`, `evidence=45`, `source_states=3`, `jobs=3`, `runs=3`. This proves slot idempotency; a real HF new-entry difference still requires a later observation.
 
 Sample stored evidence links resolved to GitHub repositories and retained the actual repository ID, star count, collection time, URL and description. No `radar_test_*` schemas remained after verification.
-

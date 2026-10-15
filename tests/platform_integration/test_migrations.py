@@ -186,4 +186,3 @@ def test_roles_do_not_gain_default_access_to_unrelated_tables(
                         sql.Identifier(migrated_schema)
                     )
                 )
-

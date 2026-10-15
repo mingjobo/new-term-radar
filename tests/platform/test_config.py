@@ -58,4 +58,3 @@ def test_paid_provider_configuration_is_rejected(tmp_path: Path, provider: str) 
 
     with pytest.raises(ConfigError, match="paid provider"):
         load_config(path)
-

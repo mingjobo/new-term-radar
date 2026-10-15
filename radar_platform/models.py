@@ -108,4 +108,3 @@ class RunSummary:
     new_terms: int
     requests: int
     errors: list[dict[str, Any]] = field(default_factory=list)
-

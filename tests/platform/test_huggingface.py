@@ -125,4 +125,3 @@ def test_quantized_model_and_demo_merge_only_with_explicit_alias(cfg: PlatformCo
         source_instance="hf:spaces",
     ).observations[0]
     assert model.entity_key == aliased_space.entity_key
-

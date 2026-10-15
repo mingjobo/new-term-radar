@@ -33,4 +33,3 @@ def canonical_key(event: EvidenceInput, aliases: dict[str, str]) -> str:
     normalized_aliases = {normalize_text(key): normalize_text(value) for key, value in aliases.items()}
     identity = _resolve_alias(identity, normalized_aliases)
     return f"{event.kind}:{identity}"
-

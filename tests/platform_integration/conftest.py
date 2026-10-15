@@ -66,4 +66,3 @@ def migrated_schema(test_dsn: str, test_schema: str) -> str:
 @pytest.fixture
 def repository(test_dsn: str, migrated_schema: str) -> Repository:
     return Repository(test_dsn, schema=migrated_schema)
-

@@ -152,4 +152,3 @@ class HttpClient:
             if response.status == 303:
                 method, body = "GET", None
         raise HttpError("too many redirects")
-

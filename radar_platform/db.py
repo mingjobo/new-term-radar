@@ -49,4 +49,3 @@ def connect(dsn: str, *, schema: str, autocommit: bool = False) -> psycopg.Conne
     connection = psycopg.connect(dsn, autocommit=autocommit, row_factory=dict_row)
     connection.execute(sql.SQL("SET search_path TO {}").format(sql.Identifier(schema)))
     return connection
-

@@ -134,4 +134,3 @@ def collect(
         for rank, item in enumerate(items, 1)
     ]
     return CollectionResult("ok", observations, next_snapshot, coverage)
-

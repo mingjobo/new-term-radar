@@ -332,4 +332,3 @@ class Repository:
             payload=row["payload"],
             last_success_at=row["last_success_at"],
         )
-

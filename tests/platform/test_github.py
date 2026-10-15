@@ -165,4 +165,3 @@ def test_empty_changed_or_truncated_search_does_not_advance_snapshot(cfg: Platfo
     assert result.status == "incomplete"
     assert result.next_snapshot is None
     assert result.observations == []
-

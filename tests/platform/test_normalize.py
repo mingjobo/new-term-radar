@@ -46,4 +46,3 @@ def test_only_explicit_aliases_merge_entities(observed_at) -> None:
     assert canonical_key(github, {}) != canonical_key(hf, {})
     aliases = {"hf:models:acme-ai/radar": "github:breakout:acme/radar"}
     assert canonical_key(github, aliases) == canonical_key(hf, aliases)
-

@@ -200,4 +200,3 @@ def collect(
 
     next_snapshot = {"repos": histories, "flagged": flagged, "slot": slot, "observed_at": now.isoformat()}
     return CollectionResult("ok", observations, next_snapshot, coverage)
-

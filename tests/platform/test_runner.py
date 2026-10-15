@@ -82,4 +82,3 @@ def test_collection_or_commit_failure_is_recorded_for_retry(monkeypatch) -> None
         assert summary["status"] == "failed"
         assert repository.failures[0][2] == NOW + timedelta(minutes=5)
         assert "RuntimeError" in repository.failures[0][1]["type"]
-

@@ -68,4 +68,3 @@ def apply_migrations(
             )
         applied.append(path.name)
     return applied
-

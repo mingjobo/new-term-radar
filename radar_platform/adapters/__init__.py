@@ -26,4 +26,3 @@ def json_body(response: HttpResponse, *, source: str) -> Any:
         return json.loads(response.body)
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise AdapterError(f"{source} returned invalid JSON") from exc
-

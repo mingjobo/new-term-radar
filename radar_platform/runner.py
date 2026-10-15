@@ -43,4 +43,3 @@ def run_source(repo, lease: Lease, cfg: PlatformConfig, now: datetime, http) -> 
         error = _safe_error(exc)
         repo.fail_job(lease, error, now + timedelta(minutes=5), now)
         return {"status": "failed", "error": error}
-
