@@ -5,9 +5,11 @@ import json
 import os
 from pathlib import Path
 from typing import Sequence
+from wsgiref.simple_server import make_server
 
 from .config import load_config
 from .migrations import apply_migrations
+from .web import create_app_from_env
 
 
 def _config_check(path: Path) -> int:
@@ -33,6 +35,9 @@ def build_parser() -> argparse.ArgumentParser:
     migrate.add_argument("--database-env", default="RADAR_MIGRATION_DATABASE_URL")
     migrate.add_argument("--schema", default="public")
     migrate.add_argument("--migrations-dir", type=Path)
+    serve = commands.add_parser("serve", help="serve the read-only research dashboard")
+    serve.add_argument("--host", default="127.0.0.1")
+    serve.add_argument("--port", type=int, default=8000)
     return parser
 
 
@@ -46,6 +51,12 @@ def main(argv: Sequence[str] | None = None) -> int:
             raise SystemExit(f"{args.database_env} is required")
         applied = apply_migrations(dsn, schema=args.schema, migrations_dir=args.migrations_dir)
         print(json.dumps({"schema": args.schema, "applied": applied}, ensure_ascii=False))
+        return 0
+    if args.command == "serve":
+        app = create_app_from_env()
+        with make_server(args.host, args.port, app) as server:
+            print(f"Serving read-only dashboard on http://{args.host}:{args.port}")
+            server.serve_forever()
         return 0
     raise AssertionError(f"unhandled command: {args.command}")
 

@@ -28,6 +28,22 @@ Do not create application roles with the Neon control-plane `create role` action
 
 Use the Neon console or secret manager to obtain these values. Do not put them in tracked files or copy the old project's `.env`.
 
+## Read-only website
+
+The dashboard reads only through `RADAR_READ_DATABASE_URL`; it deliberately refuses to fall back to the writer or legacy `DATABASE_URL`. Configure these additional server-side values:
+
+- `RADAR_WEB_USERNAME`: the Basic Auth username.
+- `RADAR_WEB_PASSWORD_SHA256`: the lowercase SHA-256 digest of the password, never the plain-text password.
+
+Run the local preview after exporting those three variables:
+
+```bash
+uv run --no-project --with 'psycopg[binary]' \
+  python -m radar_platform serve --host 127.0.0.1 --port 8000
+```
+
+The WSGI entry point for Vercel is `api/index.py`. `vercel.json` routes all requests through that entry point; `.vercelignore` excludes local environments, probes, test output and caches. The page has no collection or research mutation action. Every route requires Basic Auth, and PostgreSQL separately enforces SELECT-only access for the website role.
+
 ## Migrations
 
 Run migrations deliberately; application startup never creates or changes tables:

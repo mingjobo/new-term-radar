@@ -117,12 +117,12 @@
 
 **Interfaces:** `ReadQueries(dsn: str, *, schema: str="public")`；`overview(now: datetime) -> dict`；`terms(filters: dict, *, cursor: str|None=None, limit: int=50) -> dict` 返回 items/next_cursor；`term(term_id: str) -> dict|None`；`sources(now: datetime) -> list[dict]`；`create_app(queries: ReadQueries, *, username: str, password_sha256: str) -> Callable`。
 
-- [ ] **Step 1: 写 WSGI 失败测试。** 无凭据全站 401；正确凭据 GET 成功；POST refresh/research 均 405；缺 RADAR_READ_DATABASE_URL 失败且不回退 writer；第三方 HTML 显示为文字，javascript URL 不生成链接。
-- [ ] **Step 2: 运行** `python -m pytest -q tests/platform/test_web.py`，确认失败。
-- [ ] **Step 3: 实现 GET** `/api/overview`、`/api/terms`、`/api/terms/<id>`、`/api/sources` 与列表/详情页。参数化 SQL，排序白名单，limit 最大100，稳定时间+ID游标；显示实际采集时间和证据链接。
-- [ ] **Step 4: 适配旧部署模式。** Python WSGI 入口指向新 web；资源拆文件；Basic Auth 恒定时间哈希比较，服务端环境变量为 RADAR_WEB_USERNAME / RADAR_WEB_PASSWORD_SHA256；部署排除本地环境和产物。
-- [ ] **Step 5: 验证可见闭环。** `python -m radar_platform serve --host 127.0.0.1 --port 8000`；浏览器展示 Task 3 的隔离库数据，详情回链 GitHub/HF；reader 权限测试通过。记录页面值与数据库一致。
-- [ ] **Step 6: 提交** `feat: add read-only keyword dashboard`。
+- [x] **Step 1: 写 WSGI 失败测试。** 无凭据全站 401；正确凭据 GET 成功；POST refresh/research 均 405；缺 RADAR_READ_DATABASE_URL 失败且不回退 writer；第三方 HTML 显示为文字，javascript URL 不生成链接。
+- [x] **Step 2: 运行** `python -m pytest -q tests/platform/test_web.py`，确认失败。
+- [x] **Step 3: 实现 GET** `/api/overview`、`/api/terms`、`/api/terms/<id>`、`/api/sources` 与列表/详情页。参数化 SQL，排序白名单，limit 最大100，稳定时间+ID游标；显示实际采集时间和证据链接。
+- [x] **Step 4: 适配旧部署模式。** Python WSGI 入口指向新 web；资源拆文件；Basic Auth 恒定时间哈希比较，服务端环境变量为 RADAR_WEB_USERNAME / RADAR_WEB_PASSWORD_SHA256；部署排除本地环境和产物。
+- [x] **Step 5: 验证可见闭环。** `python -m radar_platform serve --host 127.0.0.1 --port 8000`；浏览器展示 Task 3 的隔离库数据，详情回链 GitHub/HF；reader 权限测试通过。记录页面值与数据库一致。
+- [x] **Step 6: 提交** `feat: add read-only keyword dashboard`。
 
 **关卡 A：** 两类真实免费来源 → 隔离 Neon → 本地网页；幂等、事务和权限证据齐全才算完成。
 
