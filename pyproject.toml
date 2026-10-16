@@ -33,6 +33,9 @@ mcp = ["mcp>=1.2"]
 new-term-radar = "new_term_radar.__main__:main"
 new-term-radar-mcp = "new_term_radar.mcp_server:main"
 
+[tool.vercel]
+entrypoint = "api.index:app"
+
 # The code lives in radar/ so `python -m radar` works from a clone. Installed, the
 # package is `new_term_radar`: PyPI already has an unrelated project that owns `radar`.
 [tool.setuptools]
