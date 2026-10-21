@@ -42,6 +42,14 @@ python -m radar collect --kind sites --max-jobs 20
 
 The job key is one per site per Beijing calendar day. Repeating the command on the same day does not reread a completed site. Missing days are not reconstructed. The runner claims sites one at a time so a long crawl cannot expire another site's lease before it starts.
 
+## Free GitHub Actions collector
+
+`.github/workflows/free-platform.yml` is the only V1 collector workflow. Its source slot is UTC 00:00, 08:00 and 16:00 (GitHub, HF Models, HF Spaces); its site slot is UTC 01:30 daily. GitHub Actions scheduled workflows run only after this workflow reaches the repository default branch, and the job remains **off** unless the repository variable `FREE_RADAR_ENABLED` is exactly `true`. Keep the old `RADAR_ENABLED` variable unset; it controls the separate upstream/paid workflow.
+
+For the development preview, create a protected GitHub Actions environment named `free-radar-dev` containing only the development-branch writer secret `RADAR_WRITE_DATABASE_URL`. If the production schedule is later enabled, use a separate `free-radar-production` environment containing the **production-branch** writer secret under the same key. The workflow picks the environment by event type, so a production cron cannot use the development credential. The workflow also receives GitHub's short-lived `GITHUB_TOKEN`; it must not receive the reader, site-admin, migrator, legacy Trends or paid API secrets. A manual `workflow_dispatch` run accepts `kind=sources|sites` only from `codex/free-keyword-platform`, and must be explicitly chosen in GitHub Actions. GitHub requires the workflow file to exist on the default branch before the manual Run workflow control is available; a file present only on the development branch cannot yet be dispatched. A failed or incomplete source returns a nonzero job status; inspect the JSON collector summary and rerun the same slot after the underlying issue is fixed. Neon, not Actions cache, holds job and snapshot state.
+
+Do not set `FREE_RADAR_ENABLED=true` or broaden the manual branch guard until the preview and its separate permissions have been accepted. Production enablement, production migration and default-branch merge are separate decisions.
+
 ## Read-only website
 
 The dashboard reads only through `RADAR_READ_DATABASE_URL`; it deliberately refuses to fall back to the writer or legacy `DATABASE_URL`. Configure these additional server-side values:
@@ -66,6 +74,10 @@ The Vercel Hobby project is `new-term-radar`. The stable preview alias for `code
 `https://new-term-radar-git-codex-free-keyword-b14d3b-mingjobos-projects.vercel.app`
 
 The preview is protected twice: Vercel Preview Authentication first, then the application's Basic Auth. It uses only the pooled `radar_platform_reader` URL on the isolated `dev-free-platform` Neon branch. Production has not been switched, and no writer or migrator credential is present in the website deployment.
+
+To enable the V1 settings form on **Preview only**, add the development branch's pooled `radar_platform_site_admin` URL as `RADAR_SITE_ADMIN_DATABASE_URL` and the exact protected preview origin as `RADAR_WEB_ALLOWED_ORIGINS`. Keep `RADAR_READ_DATABASE_URL`, `RADAR_WEB_USERNAME` and `RADAR_WEB_PASSWORD_SHA256` in Preview as server-side secrets. Never set `RADAR_WRITE_DATABASE_URL` or `RADAR_MIGRATION_DATABASE_URL` in Vercel. After the new preview build, verify an authenticated GET for overview/competitors/settings, a same-origin site add/pause/resume, and a cross-origin write rejection. The settings form is intentionally read-only until the separate admin URL is configured.
+
+Rollback order: first turn off `FREE_RADAR_ENABLED` (and leave old `RADAR_ENABLED` unset), then roll back the preview website deployment. Do not drop new radar tables or legacy Trends tables during a website rollback; keep their state for a later retry.
 
 ## Migrations
 

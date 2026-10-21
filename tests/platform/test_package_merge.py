@@ -42,7 +42,10 @@ def test_all_three_entrypoints_after_merge() -> None:
         assert installed.returncode == 0, installed.stderr
         env = dict(os.environ, PYTHONPATH=str(target))
         checked = subprocess.run(
-            [sys.executable, "-c", "from new_term_radar.platform.web import create_app_from_env; assert callable(create_app_from_env)"],
+            [sys.executable, "-c", "from new_term_radar.platform.web import create_app_from_env; "
+             "from new_term_radar.platform.migrations import DEFAULT_MIGRATIONS; "
+             "assert callable(create_app_from_env); "
+             "assert len(list(DEFAULT_MIGRATIONS.glob('*.sql'))) == 5"],
             cwd=tmp,
             env=env,
             capture_output=True,
@@ -111,3 +114,11 @@ def test_default_migrations_still_resolve_after_package_move() -> None:
         "004_sitemap.sql",
         "005_site_roles.sql",
     ]
+
+
+def test_packaged_migrations_match_canonical_sql() -> None:
+    packaged = ROOT / "radar/platform/schema"
+    canonical = ROOT / "schema/platform"
+    assert [path.name for path in sorted(packaged.glob("*.sql"))] == [path.name for path in sorted(canonical.glob("*.sql"))]
+    for source in canonical.glob("*.sql"):
+        assert (packaged / source.name).read_bytes() == source.read_bytes()

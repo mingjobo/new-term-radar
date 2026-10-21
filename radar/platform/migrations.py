@@ -8,7 +8,8 @@ from psycopg import sql
 from .db import connect, validate_schema_name
 
 
-DEFAULT_MIGRATIONS = Path(__file__).resolve().parents[2] / "schema/platform"
+_SOURCE_MIGRATIONS = Path(__file__).resolve().parents[2] / "schema/platform"
+DEFAULT_MIGRATIONS = _SOURCE_MIGRATIONS if _SOURCE_MIGRATIONS.is_dir() else Path(__file__).resolve().parent / "schema"
 
 
 class MigrationError(RuntimeError):

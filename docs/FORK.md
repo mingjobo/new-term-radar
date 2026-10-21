@@ -4,8 +4,9 @@
 
 ## 开发入口
 
-- [一期设计与旧项目取舍](superpowers/specs/2026-10-15-free-keyword-platform-design.md)
-- [可执行开发计划](superpowers/plans/2026-10-15-free-keyword-platform.md)
+- [一期统一架构](superpowers/specs/2026-10-21-new-term-radar-unified-architecture-design.md)
+- [一期功能需求](superpowers/specs/2026-10-21-free-radar-sitemap-v1-requirements.md)
+- [当前可执行计划](superpowers/plans/2026-10-21-unified-term-signal-v1.md)
 - 自有仓库：<https://github.com/mingjobo/new-term-radar>
 - 上游仓库：<https://github.com/zhuyansen/new-term-radar>
 - 起始基线：`e2d33c335b7aface39e6c0eed29e61df5b5ff684`，上游版本 `0.4.0`。
@@ -28,7 +29,7 @@ uv run --no-project --with pytest --with markdown --with mcp python -m pytest -q
 
 解决冲突并跑平台回归后，再通过 PR 合入 `main`。不用强制推送覆盖自有提交，不从本 fork 发布上游同名 PyPI 包或 MCP Registry 条目。平台上线时使用独立的 `free-platform.yml`；上游 `RADAR_ENABLED` 保持未设置。
 
-## 当前已完成的准备
+## 当前进度
 
 2026-10-15：
 
@@ -36,9 +37,9 @@ uv run --no-project --with pytest --with markdown --with mcp python -m pytest -q
 - `origin/main...upstream/main` 的差异为 `0 / 0`。
 - 在隔离依赖环境安装上游测试所需的 `pytest`、`markdown`、`mcp` 后运行基线：**95 passed**。
 - 已评估旧 `keyword-detective` 项目，具体迁入和舍弃项见设计文档。
-- 产品功能、Neon 新表、Vercel 新页面及自动调度尚未实现；计划中的任务不能当作完成证据。
+- 当时产品功能、Neon 新表、Vercel 新页面及自动调度尚未实现；该历史记录不能当作今天的验收证据。
 
-Vercel 本机 CLI 当前未登录，线上项目 ID 和域名尚未核实。部署任务负责登录后定位并复用现有项目；这不阻塞本地开发和测试。
+2026-10-21：`radar/` 已成为唯一主包；免费 GitHub/HF 采集、竞品 Sitemap 基线/差分、Neon 最小权限、统一工作台都已在开发分支完成，并逐项记录在 [验收记录](verification/2026-10-21-unified-v1.md)。免费 Actions 工作流仍默认关闭，正式库和正式站点均未启用。Vercel 已有 `new-term-radar` 项目和 `codex/free-keyword-platform` 的历史预览，但新工作台是否已生成新预览以验收记录中的实际部署结果为准，不以本地代码完成代替上线。
 
 ## 旧项目边界
 
