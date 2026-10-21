@@ -22,6 +22,7 @@ class WorkbenchData:
     def __init__(self) -> None:
         self.daily_mode = "normal"
         self.events_empty = False
+        self.range_status = None
         self.sites = [{
             "id": SITE_ID, "name": "AI Photo Editor", "host": "aiphotoeditor.com",
             "homepage_url": "https://aiphotoeditor.com/", "sitemap_url": None,
@@ -59,9 +60,11 @@ class WorkbenchData:
         }
 
     def competitor_sites(self, filters, *, page=1, limit=20):
-        items = [site for site in self.sites if filters.get("q", "").lower() in site["name"].lower()]
+        items = [{**site, "range_status": self.range_status or ("ok" if site["status"] == "baseline" else site["status"])}
+                 for site in self.sites if filters.get("q", "").lower() in site["name"].lower()]
         return {"items": items, "total": len(items), "page": page, "page_size": limit,
-                "summary": {"sites": len(self.sites), "added_urls": 1, "removed_urls": 1, "abnormal_sites": 0}}
+                "summary": {"sites": len(self.sites), "added_urls": 1, "removed_urls": 1,
+                            "abnormal_sites": 0, "range_complete": all(item["range_status"] == "ok" for item in items)}}
 
     def competitor_events(self, site_id, filters, *, page=1, limit=50):
         items = [{
@@ -74,7 +77,9 @@ class WorkbenchData:
         }]
         if self.events_empty:
             items = []
-        return {"site": self.sites[0], "items": items, "total": len(items), "page": page, "page_size": limit}
+        site = {**self.sites[0], "range_status": self.range_status or (
+            "ok" if self.sites[0]["status"] == "baseline" else self.sites[0]["status"])}
+        return {"site": site, "items": items, "total": len(items), "page": page, "page_size": limit}
 
     def settings_status(self, now):
         return {
@@ -172,6 +177,7 @@ def test_daily_terms_actions_and_no_baselines(page) -> None:
     assert page.get_by_role("link", name="研究卡 →").get_attribute("href") == f"/terms/{TERM_ID}"
     assert page.get_by_text("链接已拦截").count() == 1
     page.get_by_role("link", name="研究卡 →").click()
+    page.get_by_text("Evidence", exact=True).wait_for()
     assert page.get_by_text("Evidence", exact=True).count() == 1
 
 
@@ -239,6 +245,12 @@ def test_empty_failed_and_no_match_states(page, server) -> None:
         page.reload(wait_until="networkidle")
         page.get_by_role("button", name="查看页面", exact=True).first.click()
         page.get_by_text("当天没有页面增减").wait_for()
+        data.range_status = "not_collected"
+        page.reload(wait_until="networkidle")
+        assert page.locator("[data-metric=added_urls]").inner_text() == "未采集"
+        page.get_by_role("button", name="查看页面", exact=True).first.click()
+        page.get_by_text("今天尚未采集站点地图").wait_for()
+        data.range_status = None
         page.get_by_placeholder("搜索路径").fill("not-a-real-page")
         page.get_by_role("button", name="筛选").click()
         page.get_by_text("没有匹配的页面变化").wait_for()
@@ -250,3 +262,4 @@ def test_empty_failed_and_no_match_states(page, server) -> None:
         data.daily_mode = "normal"
         data.events_empty = False
         data.sites[0]["status"] = "baseline"
+        data.range_status = None

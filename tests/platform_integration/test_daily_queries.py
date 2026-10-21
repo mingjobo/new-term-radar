@@ -76,10 +76,15 @@ def test_overview_day_boundary_and_missing_state(test_dsn: str, migrated_schema:
                 (uuid.uuid4(), site_id, event_type, url, NEW),
             )
         _run(connection, "github:breakout", OLD)
+        _run(connection, "hf:models", OLD)
+        _run(connection, "hf:spaces", OLD)
         _run(connection, "github:breakout", NEW)
         _run(connection, "hf:models", NEW)
+        _run(connection, "hf:spaces", NEW)
         _run(connection, f"site:{site_id}", NEW)
         _run(connection, "github:breakout", NEXT)
+        _run(connection, "hf:models", NEXT)
+        _run(connection, "hf:spaces", NEXT)
         _run(connection, f"site:{site_id}", NEXT)
 
     queries = ReadQueries(reader_dsn, schema=migrated_schema)
@@ -92,6 +97,36 @@ def test_overview_day_boundary_and_missing_state(test_dsn: str, migrated_schema:
     assert [selected[key] for key in ("new_terms", "evidence", "changed_sites", "added_urls", "removed_urls")] == [1, 2, 1, 1, 1]
     assert [zero[key] for key in ("new_terms", "evidence", "changed_sites", "added_urls", "removed_urls")] == [0, 0, 0, 0, 0]
     assert [missing[key] for key in ("new_terms", "evidence", "changed_sites", "added_urls", "removed_urls")] == [None] * 5
+
+
+def test_overview_requires_every_enabled_site_and_source_to_have_collected(
+    test_dsn: str, migrated_schema: str, reader_dsn: str
+) -> None:
+    with psycopg.connect(test_dsn) as connection:
+        connection.execute(sql.SQL("SET search_path TO {}").format(sql.Identifier(migrated_schema)))
+        first_site, second_site = uuid.uuid4(), uuid.uuid4()
+        for site_id, name in ((first_site, "First"), (second_site, "Second")):
+            connection.execute(
+                "INSERT INTO radar_sites (id, name, homepage_url, host, created_at) "
+                "VALUES (%s, %s, %s, %s, %s)",
+                (site_id, name, f"https://{name.lower()}.example.com/", f"{name.lower()}.example.com", NEW),
+            )
+        _run(connection, "github:breakout", NEW)
+        _run(connection, "hf:models", NEW)
+        _run(connection, f"site:{first_site}", NEW)
+
+    queries = ReadQueries(reader_dsn, schema=migrated_schema)
+    partial = queries.overview(date(2026, 10, 21), NOW)
+    assert partial["new_terms"] is None and partial["evidence"] is None
+    assert partial["changed_sites"] is None and partial["added_urls"] is None and partial["removed_urls"] is None
+
+    with psycopg.connect(test_dsn) as connection:
+        connection.execute(sql.SQL("SET search_path TO {}").format(sql.Identifier(migrated_schema)))
+        _run(connection, "hf:spaces", NEW)
+        _run(connection, f"site:{second_site}", NEW)
+
+    complete = queries.overview(date(2026, 10, 21), NOW)
+    assert [complete[key] for key in ("new_terms", "evidence", "changed_sites", "added_urls", "removed_urls")] == [0] * 5
 
 
 def test_daily_terms_merges_sources_per_first_seen_term_and_research_card_keeps_evidence(test_dsn: str, migrated_schema: str, reader_dsn: str) -> None:

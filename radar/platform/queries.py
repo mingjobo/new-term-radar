@@ -126,13 +126,24 @@ class ReadQueries:
                     (SELECT count(*) FROM radar_site_events
                      WHERE event_type = 'removed' AND discovered_at >= %(day_start)s
                        AND discovered_at < %(day_end)s) AS removed_urls,
-                    (SELECT EXISTS(SELECT 1 FROM radar_runs
+                    (SELECT count(DISTINCT source_instance) = cardinality(%(source_instances)s::text[])
+                     FROM radar_runs
                      WHERE source_instance = ANY(%(source_instances)s::text[])
                        AND status IN ('ok', 'baseline')
-                       AND finished_at >= %(day_start)s AND finished_at < %(day_end)s)) AS sources_collected,
-                    (SELECT EXISTS(SELECT 1 FROM radar_runs
-                     WHERE source_instance LIKE 'site:%%' AND status = 'ok'
-                       AND finished_at >= %(day_start)s AND finished_at < %(day_end)s)) AS sites_collected,
+                       AND finished_at >= %(day_start)s AND finished_at < %(day_end)s) AS sources_collected,
+                    (EXISTS(SELECT 1 FROM radar_sites AS sites
+                            WHERE sites.enabled AND sites.created_at < %(day_end)s)
+                     AND NOT EXISTS(
+                         SELECT 1 FROM radar_sites AS sites
+                         WHERE sites.enabled AND sites.created_at < %(day_end)s
+                           AND NOT EXISTS(
+                               SELECT 1 FROM radar_runs AS runs
+                               WHERE runs.source_instance = 'site:' || sites.id::text
+                                 AND runs.status = 'ok'
+                                 AND runs.finished_at >= %(day_start)s
+                                 AND runs.finished_at < %(day_end)s
+                           )
+                     )) AS sites_collected,
                     (SELECT count(*) FROM radar_source_state) AS source_count,
                     (SELECT max(finished_at) FROM radar_runs) AS latest_run_at,
                     (SELECT count(*) FROM radar_jobs
@@ -296,6 +307,7 @@ class ReadQueries:
                        state.version, state.url_count, state.last_success_at,
                        latest.status AS last_run_status, latest.finished_at AS last_attempt_at,
                        latest.result AS last_run_result,
+                       COALESCE(period.status, 'not_collected') AS range_status,
                        COALESCE(events.added_urls, 0) AS added_urls,
                        COALESCE(events.removed_urls, 0) AS removed_urls,
                        events.latest_change_at,
@@ -316,16 +328,24 @@ class ReadQueries:
                     WHERE source_instance = 'site:' || sites.id::text
                     ORDER BY finished_at DESC, id DESC LIMIT 1
                 ) AS latest ON TRUE
+                LEFT JOIN LATERAL (
+                    SELECT status FROM radar_runs
+                    WHERE source_instance = 'site:' || sites.id::text
+                      AND finished_at >= %s AND finished_at < %s
+                    ORDER BY finished_at DESC, id DESC LIMIT 1
+                ) AS period ON TRUE
             )
         """
-        params = [start, end, datetime.now(timezone.utc) - timedelta(hours=48)] + where_params
+        params = [start, end, datetime.now(timezone.utc) - timedelta(hours=48), start, end] + where_params
         with connect(self.dsn, schema=self.schema) as connection:
             totals = connection.execute(
                 base + f"""
                 SELECT count(*) AS sites,
                        COALESCE(sum(added_urls), 0)::bigint AS added_urls,
                        COALESCE(sum(removed_urls), 0)::bigint AS removed_urls,
-                       count(*) FILTER (WHERE status IN ('failed', 'incomplete', 'stale')) AS abnormal_sites
+                       count(*) FILTER (WHERE status IN ('failed', 'incomplete', 'stale')) AS abnormal_sites,
+                       (count(*) FILTER (WHERE enabled) > 0 AND
+                        COALESCE(bool_and(NOT enabled OR range_status = 'ok'), FALSE)) AS range_complete
                 FROM base {where}
                 """,
                 params,
@@ -389,6 +409,13 @@ class ReadQueries:
             ).fetchone()
             if site is None:
                 raise ValueError("unknown site")
+            period = connection.execute(
+                """
+                SELECT status FROM radar_runs
+                WHERE source_instance = %s AND finished_at >= %s AND finished_at < %s
+                ORDER BY finished_at DESC, id DESC LIMIT 1
+                """, (f"site:{parsed_id}", start, end),
+            ).fetchone()
             total = connection.execute(
                 f"SELECT count(*) AS total FROM radar_site_events WHERE {where}", params
             ).fetchone()["total"]
@@ -411,6 +438,7 @@ class ReadQueries:
         result = site_item.pop("last_run_result") or {}
         run_error = site_item.pop("last_run_error") or {}
         site_item["status"] = _site_status(site_item, datetime.now(timezone.utc))
+        site_item["range_status"] = period["status"] if period else "not_collected"
         site_item["last_run_reason"] = result.get("reason") or run_error.get("message")
         return {
             "site": _jsonable(site_item),

@@ -182,12 +182,15 @@ async function newTerms(token) {
 function siteRow(site) {
   const row = node("article", "site-row");
   const main = node("div", "site-main");
+  const rangeStatus = site.range_status || "not_collected";
+  const displayStatus = site.status === "paused" ? "paused" :
+    rangeStatus === "ok" ? site.status : rangeStatus;
   main.append(node("strong", "site-name", site.name),
-    node("span", `status-text status-${site.status}`, statusLabel(site.status)),
+    node("span", `status-text status-${displayStatus}`, statusLabel(displayStatus)),
     node("small", "muted", `最近成功 ${formatTime(site.last_success_at)}`));
   const counts = node("div", "site-counts");
-  counts.append(node("span", "", `新增 ${site.added_urls ?? 0}`),
-    node("span", "", `移出 ${site.removed_urls ?? 0}`));
+  counts.append(node("span", "", `新增 ${rangeStatus === "ok" ? site.added_urls ?? 0 : "—"}`),
+    node("span", "", `移出 ${rangeStatus === "ok" ? site.removed_urls ?? 0 : "—"}`));
   const button = node("button", "outline-button", "查看页面");
   button.addEventListener("click", () => { state.site = site.id; state.eventFilters = {type: "all"}; siteDetail(site.id, 1); });
   row.append(main, counts, button); return row;
@@ -221,9 +224,10 @@ async function competitors(token, page = 1) {
     });
     controls.append(searchWrap, changedWrap, status, fromWrap, toWrap, apply);
     const summary = node("section", "compact-summary");
+    const complete = data.summary.range_complete === true;
     summary.append(metric("监测站点", data.summary.sites, "sites"),
-      metric("新增 URL", data.summary.added_urls, "added_urls"),
-      metric("移出 Sitemap", data.summary.removed_urls, "removed_urls"),
+      metric("新增 URL", complete ? data.summary.added_urls : null, "added_urls"),
+      metric("移出 Sitemap", complete ? data.summary.removed_urls : null, "removed_urls"),
       metric("异常站点", data.summary.abnormal_sites, "abnormal_sites"));
     const list = node("section", "site-list");
     if (!data.items.length) list.append(empty("没有匹配的站点"));
@@ -275,7 +279,16 @@ async function siteDetail(siteId, page = 1) {
       const filtered = Boolean(filters.q || filters.from || filters.to || (filters.type && filters.type !== "all"));
       let message = "当天没有页面增减";
       let detail = "这一天的站点地图中没有发现新增或移出的 URL。";
-      if (filtered) {
+      if (data.site.status === "paused") {
+        message = "站点监控已暂停";
+        detail = "历史记录仍保留，恢复后才会继续采集。";
+      } else if (data.site.range_status === "not_collected") {
+        message = filtered ? "所选时段尚未采集站点地图" : "今天尚未采集站点地图";
+        detail = "采集完成后才会判断该时段是否有页面增减。";
+      } else if (data.site.range_status === "failed" || data.site.range_status === "incomplete") {
+        message = data.site.range_status === "incomplete" ? "本次采集不完整" : "本次采集失败";
+        detail = data.site.last_run_reason || "旧页面清单已保留，这次不会推断页面移出。";
+      } else if (filtered) {
         message = "没有匹配的页面变化";
         detail = "可调整筛选条件再查看。";
       } else if (data.site.status === "not_collected") {
@@ -284,12 +297,6 @@ async function siteDetail(siteId, page = 1) {
       } else if (data.site.status === "baseline") {
         message = "首次建档尚无页面增减";
         detail = "首次完整采集只记录页面清单，不把已有页面算作新增。";
-      } else if (data.site.status === "failed" || data.site.status === "incomplete") {
-        message = data.site.status === "incomplete" ? "本次采集不完整" : "本次采集失败";
-        detail = data.site.last_run_reason || "旧页面清单已保留，这次不会推断页面移出。";
-      } else if (data.site.status === "paused") {
-        message = "站点监控已暂停";
-        detail = "历史记录仍保留，恢复后才会继续采集。";
       } else if (data.site.status === "stale") {
         message = "站点地图尚未更新";
         detail = "最近一次完整采集已超过两天。";

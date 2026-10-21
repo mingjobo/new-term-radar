@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import psycopg
 from psycopg import sql
@@ -30,18 +30,18 @@ def _site(connection, name: str, host: str, *, version: int | None = None, enabl
     return site_id
 
 
-def _run(connection, source: str, status: str, result: dict | None = None) -> None:
+def _run(connection, source: str, status: str, result: dict | None = None, *, at: datetime = NOW) -> None:
     job_key = f"test:{source}:{uuid.uuid4()}"
     connection.execute(
         "INSERT INTO radar_jobs (job_key, task, payload, scheduled_for, status) "
         "VALUES (%s, 'test', %s, %s, 'complete')",
-        (job_key, Jsonb({"source_instance": source}), NOW),
+        (job_key, Jsonb({"source_instance": source}), at),
     )
     connection.execute(
         "INSERT INTO radar_runs "
         "(id, job_key, lease_token, source_instance, status, result, started_at, finished_at) "
         "VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
-        (uuid.uuid4(), job_key, uuid.uuid4(), source, status, Jsonb(result or {}), NOW, NOW),
+        (uuid.uuid4(), job_key, uuid.uuid4(), source, status, Jsonb(result or {}), at, at),
     )
 
 
@@ -105,6 +105,10 @@ def test_failed_and_baseline_states_distinct_and_settings_include_sources(test_d
     assert by_name["Baseline"]["status"] == "baseline"
     assert by_name["Failed"]["status"] == "incomplete"
     assert by_name["Untouched"]["status"] == "not_collected"
+    assert by_name["Baseline"]["range_status"] == "ok"
+    assert by_name["Failed"]["range_status"] == "incomplete"
+    assert by_name["Untouched"]["range_status"] == "not_collected"
+    assert page["summary"]["range_complete"] is False
     assert queries.competitor_sites({**FILTERS, "status": "incomplete"})["total"] == 1
     assert queries.competitor_events(str(baseline), FILTERS)["site"]["status"] == "baseline"
     assert queries.competitor_events(str(failed), FILTERS)["site"]["status"] == "incomplete"
@@ -121,3 +125,20 @@ def test_failed_and_baseline_states_distinct_and_settings_include_sources(test_d
     assert sites["Failed"]["status"] == "incomplete"
     assert sites["Failed"]["last_run_reason"] == "missing shard"
     assert sites["Untouched"]["status"] == "not_collected"
+
+
+def test_yesterday_success_is_not_todays_zero_change(
+    test_dsn: str, migrated_schema: str, reader_dsn: str
+) -> None:
+    with psycopg.connect(test_dsn) as connection:
+        connection.execute(sql.SQL("SET search_path TO {}").format(sql.Identifier(migrated_schema)))
+        site_id = _site(connection, "Yesterday", "yesterday.example.com", version=2)
+        _run(connection, f"site:{site_id}", "ok", at=NOW - timedelta(days=1))
+
+    queries = ReadQueries(reader_dsn, schema=migrated_schema)
+    page = queries.competitor_sites(FILTERS)
+    detail = queries.competitor_events(str(site_id), FILTERS)
+    assert page["items"][0]["range_status"] == "not_collected"
+    assert page["summary"]["range_complete"] is False
+    assert detail["site"]["range_status"] == "not_collected"
+    assert detail["total"] == 0
