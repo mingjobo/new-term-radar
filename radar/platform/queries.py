@@ -3,11 +3,15 @@ from __future__ import annotations
 import base64
 import json
 import uuid
-from datetime import date, datetime, time, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from typing import Any
 from zoneinfo import ZoneInfo
 
 from .db import connect, validate_schema_name
+from .schedule import SOURCE_INSTANCES
+
+
+BEIJING = ZoneInfo("Asia/Shanghai")
 
 
 def _aware(value: datetime) -> None:
@@ -54,31 +58,175 @@ def _since(value: str) -> datetime:
         raise ValueError("invalid since filter") from exc
 
 
+def _day_bounds(day: date) -> tuple[datetime, datetime]:
+    if not isinstance(day, date) or isinstance(day, datetime):
+        raise ValueError("day must be a calendar date")
+    start = datetime.combine(day, time.min, tzinfo=BEIJING).astimezone(timezone.utc)
+    end = datetime.combine(day + timedelta(days=1), time.min, tzinfo=BEIJING).astimezone(timezone.utc)
+    return start, end
+
+
 class ReadQueries:
     def __init__(self, dsn: str, *, schema: str = "public") -> None:
         self.dsn = dsn
         self.schema = validate_schema_name(schema)
 
-    def overview(self, now: datetime) -> dict[str, Any]:
+    def overview(self, day: date | datetime, now: datetime | None = None) -> dict[str, Any]:
+        if now is None and isinstance(day, datetime):
+            now = day
+            day = now.astimezone(BEIJING).date()
+        if now is None:
+            raise ValueError("now is required")
         _aware(now)
-        local = now.astimezone(ZoneInfo("Asia/Shanghai"))
-        day_start = datetime.combine(local.date(), time.min, tzinfo=local.tzinfo).astimezone(timezone.utc)
+        if day > now.astimezone(BEIJING).date():
+            raise ValueError("future date is not allowed")
+        day_start, day_end = _day_bounds(day)
         with connect(self.dsn, schema=self.schema) as connection:
             row = connection.execute(
                 """
                 SELECT
-                    (SELECT count(*) FROM radar_terms WHERE first_seen_at >= %(day_start)s) AS new_terms_today,
-                    (SELECT count(*) FROM radar_evidence WHERE observed_at >= %(day_start)s) AS evidence_today,
+                    (SELECT count(*) FROM radar_terms
+                     WHERE first_seen_at >= %(day_start)s AND first_seen_at < %(day_end)s) AS new_terms,
+                    (SELECT count(*) FROM radar_evidence
+                     WHERE observed_at >= %(day_start)s AND observed_at < %(day_end)s) AS evidence,
+                    (SELECT count(DISTINCT site_id) FROM radar_site_events
+                     WHERE discovered_at >= %(day_start)s AND discovered_at < %(day_end)s) AS changed_sites,
+                    (SELECT count(*) FROM radar_site_events
+                     WHERE event_type = 'added' AND discovered_at >= %(day_start)s
+                       AND discovered_at < %(day_end)s) AS added_urls,
+                    (SELECT count(*) FROM radar_site_events
+                     WHERE event_type = 'removed' AND discovered_at >= %(day_start)s
+                       AND discovered_at < %(day_end)s) AS removed_urls,
+                    (SELECT EXISTS(SELECT 1 FROM radar_runs
+                     WHERE source_instance = ANY(%(source_instances)s::text[])
+                       AND status IN ('ok', 'baseline')
+                       AND finished_at >= %(day_start)s AND finished_at < %(day_end)s)) AS sources_collected,
+                    (SELECT EXISTS(SELECT 1 FROM radar_runs
+                     WHERE source_instance LIKE 'site:%%' AND status = 'ok'
+                       AND finished_at >= %(day_start)s AND finished_at < %(day_end)s)) AS sites_collected,
                     (SELECT count(*) FROM radar_source_state) AS source_count,
                     (SELECT max(finished_at) FROM radar_runs) AS latest_run_at,
                     (SELECT count(*) FROM radar_jobs
                      WHERE status = 'pending' AND task LIKE 'check%%') AS pending_checks,
                     (SELECT count(*) FROM radar_runs
-                     WHERE status = 'failed' AND finished_at >= %(day_start)s) AS failed_runs_today
+                     WHERE status = 'failed' AND finished_at >= %(day_start)s
+                       AND finished_at < %(day_end)s) AS failed_runs_today
                 """,
-                {"day_start": day_start},
+                {"day_start": day_start, "day_end": day_end, "source_instances": list(SOURCE_INSTANCES)},
             ).fetchone()
-        return _jsonable(dict(row))
+        result = dict(row)
+        result["date"] = day.isoformat()
+        if not result.pop("sources_collected"):
+            result["new_terms"] = None
+            result["evidence"] = None
+        if not result.pop("sites_collected"):
+            result["changed_sites"] = None
+            result["added_urls"] = None
+            result["removed_urls"] = None
+        result["new_terms_today"] = result["new_terms"]
+        result["evidence_today"] = result["evidence"]
+        return _jsonable(result)
+
+    def daily_terms(self, day: date, *, cursor: str | None = None, limit: int = 50) -> dict[str, Any]:
+        if not 1 <= limit <= 100:
+            raise ValueError("limit must be between 1 and 100")
+        day_start, day_end = _day_bounds(day)
+        where_params: list[Any] = [day_start, day_end]
+        cursor_clause = ""
+        if cursor:
+            seen_at, term_id = _cursor_decode(cursor)
+            cursor_clause = "AND (terms.first_seen_at, terms.id) < (%s, %s)"
+            where_params.extend([seen_at, term_id])
+        statement = f"""
+            SELECT terms.id, terms.name, terms.kind, terms.language,
+                   terms.first_seen_at, terms.last_seen_at,
+                   COALESCE((
+                       SELECT array_agg(DISTINCT evidence.source_instance ORDER BY evidence.source_instance)
+                       FROM radar_evidence AS evidence
+                       WHERE evidence.term_id = terms.id
+                         AND evidence.observed_at >= %s AND evidence.observed_at < %s
+                   ), ARRAY[]::text[]) AS sources,
+                   (SELECT count(*) FROM radar_evidence AS evidence
+                    WHERE evidence.term_id = terms.id
+                      AND evidence.observed_at >= %s AND evidence.observed_at < %s) AS evidence_count,
+                   latest.source_instance, latest.url, latest.observed_at AS discovered_at
+            FROM radar_terms AS terms
+            LEFT JOIN LATERAL (
+                SELECT source_instance, url, observed_at
+                FROM radar_evidence
+                WHERE term_id = terms.id AND observed_at >= %s AND observed_at < %s
+                ORDER BY observed_at DESC, id DESC
+                LIMIT 1
+            ) AS latest ON TRUE
+            WHERE terms.first_seen_at >= %s AND terms.first_seen_at < %s
+              {cursor_clause}
+            ORDER BY terms.first_seen_at DESC, terms.id DESC
+            LIMIT %s
+        """
+        params = [day_start, day_end] * 3 + where_params + [limit + 1]
+        with connect(self.dsn, schema=self.schema) as connection:
+            rows = connection.execute(statement, params).fetchall()
+        has_more = len(rows) > limit
+        page = rows[:limit]
+        next_cursor = _cursor_encode(page[-1]["first_seen_at"], page[-1]["id"]) if has_more and page else None
+        return {
+            "date": day.isoformat(),
+            "items": _jsonable([dict(row) for row in page]),
+            "next_cursor": next_cursor,
+            "summary": self.daily_source_status(day, datetime.now(timezone.utc)),
+        }
+
+    def daily_source_status(self, day: date, now: datetime) -> dict[str, Any]:
+        _aware(now)
+        day_start, day_end = _day_bounds(day)
+        with connect(self.dsn, schema=self.schema) as connection:
+            rows = connection.execute(
+                """
+                SELECT DISTINCT ON (source_instance) source_instance, status, finished_at
+                FROM radar_runs
+                WHERE source_instance = ANY(%s::text[])
+                  AND finished_at >= %s AND finished_at < %s
+                ORDER BY source_instance, finished_at DESC, id DESC
+                """,
+                (list(SOURCE_INSTANCES), day_start, day_end),
+            ).fetchall()
+            latest_success = connection.execute(
+                """
+                SELECT max(finished_at) AS last_success_at
+                FROM radar_runs
+                WHERE source_instance = ANY(%s::text[])
+                  AND status IN ('ok', 'baseline')
+                  AND finished_at >= %s AND finished_at < %s
+                """,
+                (list(SOURCE_INSTANCES), day_start, day_end),
+            ).fetchone()["last_success_at"]
+            counts = connection.execute(
+                """
+                SELECT
+                    (SELECT count(*) FROM radar_terms
+                     WHERE first_seen_at >= %s AND first_seen_at < %s) AS new_terms,
+                    (SELECT count(*) FROM radar_evidence
+                     WHERE observed_at >= %s AND observed_at < %s) AS evidence
+                """,
+                (day_start, day_end, day_start, day_end),
+            ).fetchone()
+        statuses = {row["source_instance"]: row["status"] for row in rows}
+        successes = sum(value in {"ok", "baseline"} for value in statuses.values())
+        if not rows:
+            status = "not_collected"
+        elif successes == len(SOURCE_INSTANCES):
+            status = "ok"
+        elif successes == 0:
+            status = "failed"
+        else:
+            status = "partial"
+        return _jsonable({
+            "date": day.isoformat(), "status": status,
+            "new_terms": counts["new_terms"] if successes else None,
+            "evidence": counts["evidence"] if successes else None,
+            "last_success_at": latest_success,
+            "sources": statuses,
+        })
 
     def terms(
         self,

@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any, Callable, Mapping
 from urllib.parse import parse_qs, urlsplit
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
 from psycopg.errors import UniqueViolation
 
@@ -91,6 +92,23 @@ def _write_payload(environ, *, required: set[str], allowed: set[str]) -> dict[st
     if not isinstance(payload, dict) or not required.issubset(payload) or set(payload) - allowed:
         raise _WriteError("400 Bad Request", "invalid settings fields")
     return payload
+
+
+def _selected_day(query_string: str, now: datetime) -> date:
+    query = parse_qs(query_string, keep_blank_values=True)
+    raw = query.get("date", [None])[0]
+    if raw is None:
+        selected = now.astimezone(ZoneInfo("Asia/Shanghai")).date()
+    else:
+        try:
+            selected = date.fromisoformat(raw)
+        except ValueError as exc:
+            raise ValueError("invalid date") from exc
+        if selected.isoformat() != raw:
+            raise ValueError("invalid date")
+    if selected > now.astimezone(ZoneInfo("Asia/Shanghai")).date():
+        raise ValueError("future date is not allowed")
+    return selected
 
 
 def create_app(
@@ -184,7 +202,20 @@ def create_app(
                     content_type += "; charset=utf-8"
                 return _response(start_response, "200 OK", static_files[path], content_type, head=head)
             if path == "/api/overview":
-                return _json_response(start_response, "200 OK", queries.overview(now), head=head)
+                day = _selected_day(environ.get("QUERY_STRING", ""), now)
+                return _json_response(start_response, "200 OK", queries.overview(day, now), head=head)
+            if path == "/api/daily-terms":
+                day = _selected_day(environ.get("QUERY_STRING", ""), now)
+                query = parse_qs(environ.get("QUERY_STRING", ""))
+                try:
+                    limit = min(max(int(query.get("limit", ["50"])[0]), 1), 100)
+                except ValueError:
+                    return _json_response(start_response, "400 Bad Request", {"error": "invalid limit"}, head=head)
+                return _json_response(
+                    start_response, "200 OK",
+                    queries.daily_terms(day, cursor=query.get("cursor", [None])[0], limit=limit),
+                    head=head,
+                )
             if path == "/api/sources":
                 return _json_response(start_response, "200 OK", {"items": queries.sources(now)}, head=head)
             if path == "/api/terms":

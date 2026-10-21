@@ -4,10 +4,11 @@ import base64
 import hashlib
 import io
 import json
+from datetime import date, datetime, timezone
 
 import pytest
 
-from radar.platform.web import create_app, create_app_from_env, safe_external_url
+from radar.platform.web import _selected_day, create_app, create_app_from_env, safe_external_url
 
 
 USERNAME = "researcher"
@@ -20,8 +21,11 @@ class FakeQueries:
         self.last_filters = None
         self.last_cursor = None
         self.last_limit = None
+        self.overview_day = None
+        self.daily_day = None
 
-    def overview(self, now):
+    def overview(self, day, now):
+        self.overview_day = day
         return {
             "new_terms_today": 1,
             "evidence_today": 1,
@@ -64,6 +68,10 @@ class FakeQueries:
 
     def sources(self, now):
         return [{"source_instance": "hf:models", "status": "baseline", "snapshot_items": 100}]
+
+    def daily_terms(self, day, *, cursor=None, limit=50):
+        self.daily_day = day
+        return {"date": day.isoformat(), "items": [], "next_cursor": None}
 
 
 def _auth(username: str = USERNAME, password: str = PASSWORD) -> str:
@@ -177,3 +185,22 @@ def test_invalid_credentials_and_sort_are_rejected(app) -> None:
     status, _, body = _request(app, "/api/terms?sort=drop-table", auth=_auth())
     assert status == "400 Bad Request"
     assert json.loads(body) == {"error": "unsupported sort"}
+
+
+def test_future_date_rejected_before_daily_queries(app) -> None:
+    for path in ("/api/overview?date=9999-12-31", "/api/daily-terms?date=9999-12-31"):
+        status, _, body = _request(app, path, auth=_auth())
+        assert status == "400 Bad Request"
+        assert json.loads(body)["error"] == "future date is not allowed"
+
+
+def test_selected_date_reaches_both_daily_endpoints(app, queries: FakeQueries) -> None:
+    assert _request(app, "/api/overview?date=2026-10-20", auth=_auth())[0] == "200 OK"
+    assert _request(app, "/api/daily-terms?date=2026-10-20", auth=_auth())[0] == "200 OK"
+    assert queries.overview_day == date(2026, 10, 20)
+    assert queries.daily_day == date(2026, 10, 20)
+
+
+def test_default_date_uses_beijing_midnight_boundary() -> None:
+    assert _selected_day("", datetime(2026, 10, 20, 15, 59, tzinfo=timezone.utc)) == date(2026, 10, 20)
+    assert _selected_day("", datetime(2026, 10, 20, 16, 0, tzinfo=timezone.utc)) == date(2026, 10, 21)
