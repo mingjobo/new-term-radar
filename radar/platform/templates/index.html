@@ -9,33 +9,26 @@
   <script src="/static/app.js" defer></script>
 </head>
 <body>
-  <div class="paper-grain" aria-hidden="true"></div>
-  <header class="masthead">
-    <a class="identity" href="/" aria-label="返回研究台首页">
-      <span class="identity-mark">TS</span>
-      <span>
-        <strong>TERM SIGNAL</strong>
-        <small>FREE RESEARCH DESK · SHANGHAI</small>
-      </span>
-    </a>
-    <div class="edition">
-      <span id="edition-date">DAILY EDITION</span>
-      <span class="live-dot">READ ONLY</span>
+  <div class="workbench">
+    <aside id="sidebar" class="sidebar">
+      <a class="brand" href="/#overview" aria-label="Term Signal 总览">
+        <span class="brand-mark">TS</span>
+        <span><strong>TERM SIGNAL</strong><small>KEYWORD RESEARCH</small></span>
+      </a>
+      <nav id="primary-nav" class="primary-nav" aria-label="主要功能">
+        <a href="/#overview" data-nav="overview">总览</a>
+        <a href="/#keywords" data-nav="keywords">关键词看板</a>
+        <a href="/#settings" data-nav="settings">设置</a>
+      </nav>
+      <p class="sidebar-foot">GitHub · Hugging Face · Sitemap<br>数据来自真实采集，不推测搜索量。</p>
+    </aside>
+    <div class="workspace">
+      <header class="topbar">
+        <button id="menu-toggle" class="menu-toggle" type="button" aria-label="打开菜单" aria-expanded="false">☰</button>
+        <div id="topbar-content" class="topbar-content"></div>
+      </header>
+      <main id="content" aria-live="polite"><p class="loading">正在读取已保存的数据…</p></main>
     </div>
-  </header>
-
-  <main id="app" aria-live="polite">
-    <section class="loading-state">
-      <p class="eyebrow">正在读取已保存的研究结果</p>
-      <h1>把新出现的名字，变成可追溯的线索。</h1>
-      <div class="loading-rule"><span></span></div>
-    </section>
-  </main>
-
-  <footer>
-    <span>GitHub + Hugging Face</span>
-    <span>证据优先 · 无虚构搜索量</span>
-    <span id="footer-updated">WAITING FOR DATABASE</span>
-  </footer>
+  </div>
 </body>
 </html>
