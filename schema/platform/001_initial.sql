@@ -110,3 +110,4 @@ CREATE INDEX radar_evidence_source_observed_idx ON radar_evidence (source_instan
 CREATE INDEX radar_jobs_due_idx ON radar_jobs (status, scheduled_for, lease_expires_at);
 CREATE INDEX radar_runs_source_finished_idx ON radar_runs (source_instance, finished_at DESC);
 CREATE INDEX radar_checks_due_idx ON radar_checks (due_at, status);
+

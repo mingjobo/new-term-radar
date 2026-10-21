@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 from pathlib import Path
 
 import psycopg
@@ -21,6 +22,10 @@ EXPECTED_TABLES = {
     "radar_runs",
     "radar_checks",
     "radar_reports",
+    "radar_sites",
+    "radar_site_state",
+    "radar_site_urls",
+    "radar_site_events",
 }
 LEGACY_TABLES = {
     "rising_queries",
@@ -30,6 +35,17 @@ LEGACY_TABLES = {
     "snapshot_keyword_diffs",
     "snapshot_keyword_diff_items",
 }
+
+APPLIED_MIGRATION_HASHES = {
+    "001_initial.sql": "d3f8a898cb71cd2bf04223287d8470f735ada41b91331de0fbb28d08b7b20f01",
+    "002_roles.sql": "4937f168cb06afb1edd3515f0af9d5e71a36953b962ce67adf3e33435328ed6d",
+    "003_role_defaults.sql": "645a6c6b9913cfbac512fb01681af5fd37713f3e1a191a31f38e59e061b0f2ae",
+}
+
+
+def test_historical_migration_bytes_are_immutable() -> None:
+    for name, expected in APPLIED_MIGRATION_HASHES.items():
+        assert hashlib.sha256((ROOT / "schema/platform" / name).read_bytes()).hexdigest() == expected
 
 
 @pytest.mark.parametrize(
@@ -56,7 +72,7 @@ def test_migrations_idempotent_and_checksums_match(test_dsn: str, test_schema: s
     first = apply_migrations(test_dsn, schema=test_schema)
     second = apply_migrations(test_dsn, schema=test_schema)
 
-    assert first == ["001_initial.sql", "002_roles.sql", "003_role_defaults.sql"]
+    assert first == ["001_initial.sql", "002_roles.sql", "003_role_defaults.sql", "004_sitemap.sql", "005_site_roles.sql"]
     assert second == []
     with psycopg.connect(test_dsn) as connection:
         connection.execute(sql.SQL("SET search_path TO {}").format(sql.Identifier(test_schema)))
@@ -71,7 +87,7 @@ def test_migrations_idempotent_and_checksums_match(test_dsn: str, test_schema: s
             "SELECT version, checksum FROM radar_schema_migrations ORDER BY version"
         ).fetchall()
     assert tables == EXPECTED_TABLES
-    assert [row[0] for row in versions] == ["001_initial.sql", "002_roles.sql", "003_role_defaults.sql"]
+    assert [row[0] for row in versions] == ["001_initial.sql", "002_roles.sql", "003_role_defaults.sql", "004_sitemap.sql", "005_site_roles.sql"]
     assert all(len(row[1]) == 64 for row in versions)
 
     changed_dir = tmp_path / "migrations"

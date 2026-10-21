@@ -108,4 +108,6 @@ def test_default_migrations_still_resolve_after_package_move() -> None:
         "001_initial.sql",
         "002_roles.sql",
         "003_role_defaults.sql",
+        "004_sitemap.sql",
+        "005_site_roles.sql",
     ]
