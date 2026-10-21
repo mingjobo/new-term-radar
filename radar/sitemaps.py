@@ -26,6 +26,7 @@ import urllib.request
 from pathlib import Path
 
 from . import UA, snap
+from .sitemap_urls import decode_loc
 from .terms import by_source, surges
 
 TIMEOUT = 40
@@ -58,12 +59,12 @@ def fetch(url: str) -> str:
 
 def site_urls(index: str, shards: str | None, pause: float, strip_locale: bool = False) -> set[str]:
     files = [index] if not shards else \
-        [u for u in _LOC.findall(fetch(index)) if re.search(shards, u.replace("&amp;", "&"))]
+        [u for u in _LOC.findall(fetch(index)) if re.search(shards, decode_loc(u))]
     urls: set[str] = set()
     for i, u in enumerate(files):
         if i or shards:
             time.sleep(pause)
-        urls.update(x.replace("&amp;", "&") for x in _LOC.findall(fetch(u)))
+        urls.update(decode_loc(x) for x in _LOC.findall(fetch(u)))
     return {re.sub(_LOCALE, r"\1", u) for u in urls} if strip_locale else urls
 
 
