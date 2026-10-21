@@ -5,6 +5,7 @@ import json
 import uuid
 from datetime import date, datetime, time, timedelta, timezone
 from typing import Any
+from urllib.parse import urlsplit
 from zoneinfo import ZoneInfo
 
 from .db import connect, validate_schema_name
@@ -63,6 +64,20 @@ def _day_bounds(day: date) -> tuple[datetime, datetime]:
         raise ValueError("day must be a calendar date")
     start = datetime.combine(day, time.min, tzinfo=BEIJING).astimezone(timezone.utc)
     end = datetime.combine(day + timedelta(days=1), time.min, tzinfo=BEIJING).astimezone(timezone.utc)
+    return start, end
+
+
+def _site_range(filters: dict[str, str]) -> tuple[datetime, datetime]:
+    today = datetime.now(timezone.utc).astimezone(BEIJING).date()
+    try:
+        from_day = date.fromisoformat(filters.get("from", today.isoformat()))
+        to_day = date.fromisoformat(filters.get("to", today.isoformat()))
+    except ValueError as exc:
+        raise ValueError("invalid date range") from exc
+    if from_day > to_day or to_day > today or (to_day - from_day).days > 90:
+        raise ValueError("invalid date range")
+    start, _ = _day_bounds(from_day)
+    _, end = _day_bounds(to_day)
     return start, end
 
 
@@ -228,6 +243,199 @@ class ReadQueries:
             "sources": statuses,
         })
 
+    def competitor_sites(
+        self, filters: dict[str, str], *, page: int = 1, limit: int = 20
+    ) -> dict[str, Any]:
+        if page < 1 or not 1 <= limit <= 100:
+            raise ValueError("invalid page or limit")
+        start, end = _site_range(filters)
+        changed = filters.get("changed")
+        if changed not in {None, "1", "true"}:
+            raise ValueError("invalid changed filter")
+        status = filters.get("status")
+        if status and status not in {"paused", "not_collected", "baseline", "ok", "failed", "incomplete", "stale"}:
+            raise ValueError("invalid site status")
+        conditions = []
+        where_params: list[Any] = []
+        q = filters.get("q", "").strip()[:100]
+        if q:
+            conditions.append("(name ILIKE %s OR host ILIKE %s)")
+            where_params.extend([f"%{q}%", f"%{q}%"])
+        if changed:
+            conditions.append("(added_urls + removed_urls) > 0")
+        if status:
+            conditions.append("status = %s")
+            where_params.append(status)
+        where = "WHERE " + " AND ".join(conditions) if conditions else ""
+        base = """
+            WITH event_counts AS (
+                SELECT site_id,
+                       count(*) FILTER (WHERE event_type = 'added') AS added_urls,
+                       count(*) FILTER (WHERE event_type = 'removed') AS removed_urls,
+                       max(discovered_at) AS latest_change_at
+                FROM radar_site_events
+                WHERE discovered_at >= %s AND discovered_at < %s
+                GROUP BY site_id
+            ), base AS (
+                SELECT sites.id, sites.name, sites.host, sites.homepage_url,
+                       sites.sitemap_url, sites.enabled,
+                       state.version, state.url_count, state.last_success_at,
+                       latest.status AS last_run_status, latest.finished_at AS last_attempt_at,
+                       latest.result AS last_run_result,
+                       COALESCE(events.added_urls, 0) AS added_urls,
+                       COALESCE(events.removed_urls, 0) AS removed_urls,
+                       events.latest_change_at,
+                       CASE
+                         WHEN NOT sites.enabled THEN 'paused'
+                         WHEN latest.status IN ('failed', 'incomplete') THEN latest.status
+                         WHEN state.version IS NULL THEN 'not_collected'
+                         WHEN state.version = 1 THEN 'baseline'
+                         WHEN state.last_success_at < %s THEN 'stale'
+                         ELSE 'ok'
+                       END AS status
+                FROM radar_sites AS sites
+                LEFT JOIN radar_site_state AS state ON state.site_id = sites.id
+                LEFT JOIN event_counts AS events ON events.site_id = sites.id
+                LEFT JOIN LATERAL (
+                    SELECT status, finished_at, result
+                    FROM radar_runs
+                    WHERE source_instance = 'site:' || sites.id::text
+                    ORDER BY finished_at DESC, id DESC LIMIT 1
+                ) AS latest ON TRUE
+            )
+        """
+        params = [start, end, datetime.now(timezone.utc) - timedelta(hours=48)] + where_params
+        with connect(self.dsn, schema=self.schema) as connection:
+            totals = connection.execute(
+                base + f"""
+                SELECT count(*) AS sites,
+                       COALESCE(sum(added_urls), 0)::bigint AS added_urls,
+                       COALESCE(sum(removed_urls), 0)::bigint AS removed_urls,
+                       count(*) FILTER (WHERE status IN ('failed', 'incomplete', 'stale')) AS abnormal_sites
+                FROM base {where}
+                """,
+                params,
+            ).fetchone()
+            rows = connection.execute(
+                base + f"""
+                SELECT * FROM base {where}
+                ORDER BY latest_change_at DESC NULLS LAST, name, id
+                LIMIT %s OFFSET %s
+                """,
+                params + [limit, (page - 1) * limit],
+            ).fetchall()
+        return {
+            "items": _jsonable([dict(row) for row in rows]),
+            "total": totals["sites"],
+            "summary": _jsonable(dict(totals)),
+            "page": page,
+            "page_size": limit,
+        }
+
+    def competitor_events(
+        self, site_id: str, filters: dict[str, str], *, page: int = 1, limit: int = 50
+    ) -> dict[str, Any]:
+        if page < 1 or not 1 <= limit <= 100:
+            raise ValueError("invalid page or limit")
+        try:
+            parsed_id = uuid.UUID(site_id)
+        except ValueError as exc:
+            raise ValueError("invalid site ID") from exc
+        start, end = _site_range(filters)
+        event_type = filters.get("type", "all")
+        if event_type not in {"all", "added", "removed"}:
+            raise ValueError("invalid event type")
+        clauses = ["site_id = %s", "discovered_at >= %s", "discovered_at < %s"]
+        params: list[Any] = [parsed_id, start, end]
+        if event_type != "all":
+            clauses.append("event_type = %s")
+            params.append(event_type)
+        q = filters.get("q", "").strip()[:100]
+        if q:
+            clauses.append("url ILIKE %s")
+            params.append(f"%{q}%")
+        where = " AND ".join(clauses)
+        with connect(self.dsn, schema=self.schema) as connection:
+            site = connection.execute(
+                "SELECT id, name, host, enabled FROM radar_sites WHERE id = %s", (parsed_id,)
+            ).fetchone()
+            if site is None:
+                raise ValueError("unknown site")
+            total = connection.execute(
+                f"SELECT count(*) AS total FROM radar_site_events WHERE {where}", params
+            ).fetchone()["total"]
+            rows = connection.execute(
+                f"""
+                SELECT id, event_type, url, discovered_at
+                FROM radar_site_events WHERE {where}
+                ORDER BY discovered_at DESC, id ASC
+                LIMIT %s OFFSET %s
+                """,
+                params + [limit, (page - 1) * limit],
+            ).fetchall()
+        items = []
+        for row in rows:
+            item = dict(row)
+            parsed = urlsplit(item["url"])
+            item["path"] = parsed.path or "/"
+            items.append(item)
+        return {
+            "site": _jsonable(dict(site)),
+            "items": _jsonable(items),
+            "total": total,
+            "page": page,
+            "page_size": limit,
+        }
+
+    def settings_status(self, now: datetime) -> dict[str, Any]:
+        _aware(now)
+        with connect(self.dsn, schema=self.schema) as connection:
+            rows = connection.execute(
+                """
+                SELECT sites.id, sites.name, sites.host, sites.homepage_url,
+                       sites.sitemap_url, sites.enabled, sites.created_at,
+                       state.version, state.url_count, state.last_success_at,
+                       latest.status AS last_run_status, latest.finished_at AS last_attempt_at,
+                       latest.result AS last_run_result, latest.error AS last_run_error
+                FROM radar_sites AS sites
+                LEFT JOIN radar_site_state AS state ON state.site_id = sites.id
+                LEFT JOIN LATERAL (
+                    SELECT status, finished_at, result, error
+                    FROM radar_runs
+                    WHERE source_instance = 'site:' || sites.id::text
+                    ORDER BY finished_at DESC, id DESC LIMIT 1
+                ) AS latest ON TRUE
+                ORDER BY sites.name, sites.id
+                """
+            ).fetchall()
+        sites = []
+        for row in rows:
+            item = dict(row)
+            result = item.pop("last_run_result") or {}
+            run_error = item.get("last_run_error") or {}
+            if not item["enabled"]:
+                status = "paused"
+            elif item["last_run_status"] in {"failed", "incomplete"}:
+                status = item["last_run_status"]
+            elif item["version"] is None:
+                status = "not_collected"
+            elif item["version"] == 1:
+                status = "baseline"
+            elif item["last_success_at"] < now - timedelta(hours=48):
+                status = "stale"
+            else:
+                status = "ok"
+            item["status"] = status
+            item["added_last_run"] = result.get("added")
+            item["removed_last_run"] = result.get("removed")
+            item["last_run_reason"] = result.get("reason") or run_error.get("message")
+            sites.append(_jsonable(item))
+        sources = self.sources(now)
+        for source in sources:
+            result = source.get("run_result") or {}
+            source["new_terms_last_run"] = result.get("new_terms")
+        return {"sources": sources, "sites": sites}
+
     def terms(
         self,
         filters: dict[str, str],
@@ -328,9 +536,7 @@ class ReadQueries:
             rows = connection.execute(
                 """
                 WITH instances AS (
-                    SELECT source_instance FROM radar_source_state
-                    UNION
-                    SELECT source_instance FROM radar_runs WHERE source_instance IS NOT NULL
+                    SELECT unnest(%s::text[]) AS source_instance
                 )
                 SELECT instances.source_instance, state.version, state.payload, state.last_success_at,
                        latest.status AS run_status, latest.finished_at AS last_run_at,
@@ -345,7 +551,8 @@ class ReadQueries:
                     LIMIT 1
                 ) AS latest ON TRUE
                 ORDER BY instances.source_instance
-                """
+                """,
+                (list(SOURCE_INSTANCES),),
             ).fetchall()
         output = []
         for row in rows:
@@ -358,7 +565,7 @@ class ReadQueries:
             else:
                 item["snapshot_items"] = 0
             status = item.pop("run_status") or ("ok" if item.get("last_success_at") else "not_run")
-            if item.get("last_success_at") and (now - item["last_success_at"]).total_seconds() > 86400:
+            if status in {"ok", "baseline"} and item.get("last_success_at") and (now - item["last_success_at"]).total_seconds() > 86400:
                 status = "stale"
             item["status"] = status
             output.append(_jsonable(item))

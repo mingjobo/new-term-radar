@@ -216,6 +216,41 @@ def create_app(
                     queries.daily_terms(day, cursor=query.get("cursor", [None])[0], limit=limit),
                     head=head,
                 )
+            if path == "/api/competitors":
+                query = parse_qs(environ.get("QUERY_STRING", ""))
+                try:
+                    page_number = int(query.get("page", ["1"])[0])
+                    limit = int(query.get("limit", ["20"])[0])
+                except ValueError:
+                    return _json_response(start_response, "400 Bad Request", {"error": "invalid page or limit"}, head=head)
+                if page_number < 1 or not 1 <= limit <= 100:
+                    return _json_response(start_response, "400 Bad Request", {"error": "invalid page or limit"}, head=head)
+                filters = {key: query[key][0] for key in ("q", "changed", "status", "from", "to") if query.get(key)}
+                return _json_response(
+                    start_response, "200 OK",
+                    queries.competitor_sites(filters, page=page_number, limit=limit), head=head,
+                )
+            if path.startswith("/api/competitors/") and path.endswith("/events"):
+                site_id = path.removeprefix("/api/competitors/").removesuffix("/events")
+                try:
+                    UUID(site_id)
+                except ValueError:
+                    return _json_response(start_response, "400 Bad Request", {"error": "invalid site ID"}, head=head)
+                query = parse_qs(environ.get("QUERY_STRING", ""))
+                try:
+                    page_number = int(query.get("page", ["1"])[0])
+                    limit = int(query.get("limit", ["50"])[0])
+                except ValueError:
+                    return _json_response(start_response, "400 Bad Request", {"error": "invalid page or limit"}, head=head)
+                if page_number < 1 or not 1 <= limit <= 100:
+                    return _json_response(start_response, "400 Bad Request", {"error": "invalid page or limit"}, head=head)
+                filters = {key: query[key][0] for key in ("type", "q", "from", "to") if query.get(key)}
+                return _json_response(
+                    start_response, "200 OK",
+                    queries.competitor_events(site_id, filters, page=page_number, limit=limit), head=head,
+                )
+            if path == "/api/settings/status":
+                return _json_response(start_response, "200 OK", queries.settings_status(now), head=head)
             if path == "/api/sources":
                 return _json_response(start_response, "200 OK", {"items": queries.sources(now)}, head=head)
             if path == "/api/terms":
