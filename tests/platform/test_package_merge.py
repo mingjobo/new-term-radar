@@ -98,3 +98,14 @@ def test_no_live_radar_platform_imports() -> None:
                 else:
                     continue
                 assert all(name != "radar_platform" and not name.startswith("radar_platform.") for name in names), file
+
+
+def test_default_migrations_still_resolve_after_package_move() -> None:
+    from radar.platform.migrations import DEFAULT_MIGRATIONS
+
+    assert DEFAULT_MIGRATIONS == ROOT / "schema/platform"
+    assert [path.name for path in sorted(DEFAULT_MIGRATIONS.glob("*.sql"))] == [
+        "001_initial.sql",
+        "002_roles.sql",
+        "003_role_defaults.sql",
+    ]
