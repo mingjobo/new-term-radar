@@ -30,6 +30,18 @@ Do not create application roles with the Neon control-plane `create role` action
 
 Use the Neon console or secret manager to obtain these values. Do not put them in tracked files or copy the old project's `.env`.
 
+## Daily monitored-site collection
+
+After the site-admin role adds a site through settings, the next daily collector run reads its public robots.txt and complete Sitemap. The first complete run saves URLs without emitting change events. Later complete runs compare URL sets; an incomplete or failed read retains the previous baseline. Pausing a site keeps its history and prevents new daily jobs. This collector uses only `RADAR_WRITE_DATABASE_URL` and never accepts the site-admin or reader URL as a fallback.
+
+For a manual development-branch check only:
+
+```bash
+python -m radar collect --kind sites --max-jobs 20
+```
+
+The job key is one per site per Beijing calendar day. Repeating the command on the same day does not reread a completed site. Missing days are not reconstructed. The runner claims sites one at a time so a long crawl cannot expire another site's lease before it starts.
+
 ## Read-only website
 
 The dashboard reads only through `RADAR_READ_DATABASE_URL`; it deliberately refuses to fall back to the writer or legacy `DATABASE_URL`. Configure these additional server-side values:

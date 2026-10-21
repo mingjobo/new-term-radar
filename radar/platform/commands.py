@@ -67,11 +67,10 @@ def run_platform_command(command: str, argv: list[str]) -> int:
         dsn = os.environ.get("RADAR_WRITE_DATABASE_URL")
         if not dsn:
             raise SystemExit("RADAR_WRITE_DATABASE_URL is required")
-        if args.kind == "sites":
-            raise SystemExit("site collection is not available yet")
         from .http import HttpClient
         from .repository import Repository
-        from .schedule import run_due_sources
+        from .schedule import run_due_sites, run_due_sources
+        from .site_store import SiteStore
 
         cfg = load_config(args.config)
 
@@ -84,9 +83,23 @@ def run_platform_command(command: str, argv: list[str]) -> int:
                 timeout=float(cfg.budgets.get("request_timeout_seconds", 30)),
             )
 
-        summary = run_due_sources(
-            Repository(dsn), cfg, datetime.now(timezone.utc), http_factory, max_jobs=args.max_jobs
-        )
+        if args.kind == "sites":
+            def site_http_factory(host: str) -> HttpClient:
+                return HttpClient(
+                    allowed_hosts={host},
+                    tick_limit=22,
+                    source_limit=22,
+                    timeout=float(cfg.budgets.get("request_timeout_seconds", 30)),
+                )
+
+            summary = run_due_sites(
+                Repository(dsn), SiteStore(dsn), datetime.now(timezone.utc),
+                site_http_factory, max_jobs=args.max_jobs,
+            )
+        else:
+            summary = run_due_sources(
+                Repository(dsn), cfg, datetime.now(timezone.utc), http_factory, max_jobs=args.max_jobs
+            )
         print(json.dumps(asdict(summary), ensure_ascii=False))
         return 0 if summary.status == "ok" else 1
     raise AssertionError(f"unhandled command: {args.command}")
