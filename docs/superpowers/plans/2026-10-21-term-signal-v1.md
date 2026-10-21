@@ -1,5 +1,7 @@
 # Term Signal 免费研究工作台 V1 Implementation Plan
 
+> **已由[统一主包实施计划](2026-10-21-unified-term-signal-v1.md)替代。** 本文件仅保留历史设计记录；不得按此文件继续开发。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 将现有 GitHub/HF 新词、每日 Sitemap 增减和可管理站点的设置，整合进一个自动运行的 Term Signal 工作台。
