@@ -67,7 +67,7 @@ def _counts(dsn: str, schema: str) -> dict[str, int]:
         }
 
 
-def test_write_failure_retries_identically_while_other_source_commits(
+def test_write_failure_waits_for_next_slot_while_other_source_commits(
     repository: Repository,
     test_dsn: str,
     migrated_schema: str,
@@ -105,15 +105,22 @@ def test_write_failure_retries_identically_while_other_source_commits(
         hf_lease,
         cfg,
         NOW,
-        JsonHttp([{"id": "org/model", "likes": 3, "pipeline_tag": "text-generation"}]),
+        JsonHttp([
+            {"id": f"org/model-{number}", "likes": 3, "pipeline_tag": "text-generation"}
+            for number in range(100)
+        ]),
     )
     assert hf["status"] == "baseline"
     assert repository.get_source_state("hf:models").version == 1
     assert repository.get_source_state("github:breakout").version == 0
 
-    retry_time = NOW + timedelta(minutes=5)
-    retry_lease = repository.claim_due(retry_time)[0]
-    retried = run_source(repository, retry_lease, cfg, retry_time, JsonHttp(_github_payload()))
+    assert repository.claim_due(NOW + timedelta(minutes=5)) == []
+    next_slot = NOW + timedelta(hours=8)
+    assert repository.enqueue(
+        "probe:github:next-slot", "collect", next_slot, {"source_instance": "github:breakout"}
+    )
+    retry_lease = repository.claim_due(next_slot)[0]
+    retried = run_source(repository, retry_lease, cfg, next_slot, JsonHttp(_github_payload()))
 
     assert retried == {"status": "ok", "observations": 1, "new_terms": 1, "source_version": 1}
     assert _counts(test_dsn, migrated_schema) == {

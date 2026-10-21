@@ -37,6 +37,16 @@ def _seed(repository) -> str:
         expected_version=0,
         now=NOW,
     )
+    for source in ("hf:models", "hf:spaces"):
+        assert repository.enqueue(f"web:seed:{source}", "collect", NOW, {"source_instance": source})
+        source_lease = repository.claim_due(NOW)[0]
+        repository.commit_source(
+            source_lease,
+            CollectionResult("baseline", [], {"ids": [f"item-{n}" for n in range(100)]},
+                             {"complete": True, "items": 100}),
+            expected_version=0,
+            now=NOW,
+        )
     with psycopg.connect(repository.dsn) as connection:
         connection.execute(sql.SQL("SET search_path TO {}").format(sql.Identifier(repository.schema)))
         return str(connection.execute("SELECT id FROM radar_terms").fetchone()[0])
