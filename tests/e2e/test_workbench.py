@@ -148,6 +148,7 @@ def page(browser, server):
 def test_sidebar_and_tabs_exact_labels(page) -> None:
     assert page.locator("#primary-nav a").all_text_contents() == ["总览", "关键词看板", "设置"]
     page.get_by_role("link", name="关键词看板").click()
+    page.locator("#board-tabs button").first.wait_for()
     assert page.locator("#board-tabs button").all_text_contents() == ["新词", "竞品"]
     assert page.locator("#content").get_by_text("关键词看板", exact=True).count() == 0
 
@@ -229,6 +230,17 @@ def test_empty_failed_and_no_match_states(page, server) -> None:
         page.locator(".site-row .status-text").first.wait_for()
         assert page.locator(".site-row .status-text").first.inner_text() == "首次建档"
         page.get_by_role("button", name="查看页面", exact=True).first.click()
+        page.get_by_text("首次建档尚无页面增减").wait_for()
+        data.sites[0]["status"] = "incomplete"
+        page.reload(wait_until="networkidle")
+        page.get_by_role("button", name="查看页面", exact=True).first.click()
+        page.get_by_text("本次采集不完整").wait_for()
+        data.sites[0]["status"] = "ok"
+        page.reload(wait_until="networkidle")
+        page.get_by_role("button", name="查看页面", exact=True).first.click()
+        page.get_by_text("当天没有页面增减").wait_for()
+        page.get_by_placeholder("搜索路径").fill("not-a-real-page")
+        page.get_by_role("button", name="筛选").click()
         page.get_by_text("没有匹配的页面变化").wait_for()
         page.get_by_role("button", name="← 返回站点").click()
         page.get_by_placeholder("搜索站点").fill("not-a-real-site")
@@ -237,3 +249,4 @@ def test_empty_failed_and_no_match_states(page, server) -> None:
     finally:
         data.daily_mode = "normal"
         data.events_empty = False
+        data.sites[0]["status"] = "baseline"

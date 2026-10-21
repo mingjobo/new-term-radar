@@ -106,6 +106,9 @@ def test_failed_and_baseline_states_distinct_and_settings_include_sources(test_d
     assert by_name["Failed"]["status"] == "incomplete"
     assert by_name["Untouched"]["status"] == "not_collected"
     assert queries.competitor_sites({**FILTERS, "status": "incomplete"})["total"] == 1
+    assert queries.competitor_events(str(baseline), FILTERS)["site"]["status"] == "baseline"
+    assert queries.competitor_events(str(failed), FILTERS)["site"]["status"] == "incomplete"
+    assert queries.competitor_events(str(untouched), FILTERS)["site"]["status"] == "not_collected"
 
     settings = queries.settings_status(NOW)
     sources = {item["source_instance"]: item for item in settings["sources"]}

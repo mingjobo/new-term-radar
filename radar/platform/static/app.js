@@ -271,8 +271,31 @@ async function siteDetail(siteId, page = 1) {
     });
     controls.append(type, searchWrap, fromWrap, toWrap, apply);
     const list = node("section", "event-list");
-    if (!data.items.length) list.append(empty("没有匹配的页面变化",
-      "首次建档、无变化或筛选后无结果时，这里不会显示 URL。"));
+    if (!data.items.length) {
+      const filtered = Boolean(filters.q || filters.from || filters.to || (filters.type && filters.type !== "all"));
+      let message = "当天没有页面增减";
+      let detail = "这一天的站点地图中没有发现新增或移出的 URL。";
+      if (filtered) {
+        message = "没有匹配的页面变化";
+        detail = "可调整筛选条件再查看。";
+      } else if (data.site.status === "not_collected") {
+        message = "尚未采集站点地图";
+        detail = "首次完整采集后才会建立基线。";
+      } else if (data.site.status === "baseline") {
+        message = "首次建档尚无页面增减";
+        detail = "首次完整采集只记录页面清单，不把已有页面算作新增。";
+      } else if (data.site.status === "failed" || data.site.status === "incomplete") {
+        message = data.site.status === "incomplete" ? "本次采集不完整" : "本次采集失败";
+        detail = data.site.last_run_reason || "旧页面清单已保留，这次不会推断页面移出。";
+      } else if (data.site.status === "paused") {
+        message = "站点监控已暂停";
+        detail = "历史记录仍保留，恢复后才会继续采集。";
+      } else if (data.site.status === "stale") {
+        message = "站点地图尚未更新";
+        detail = "最近一次完整采集已超过两天。";
+      }
+      list.append(empty(message, detail));
+    }
     data.items.forEach((item) => list.append(eventRow(item)));
     content.replaceChildren(heading, controls, list,
       paging(page, data.total, data.page_size || 50, (next) => siteDetail(siteId, next)));

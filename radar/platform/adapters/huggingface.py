@@ -93,7 +93,13 @@ def collect(
         f"https://huggingface.co/api/{kind}?sort=trendingScore&direction=-1&limit={TOP_SNAPSHOT}",
         headers={"Accept": "application/json", "User-Agent": "new-term-radar-free/0.1"},
     )
-    items = _valid_items(json_body(response, source=source_instance))
+    payload = json_body(response, source=source_instance)
+    if isinstance(payload, list) and 0 < len(payload) < TOP_SNAPSHOT:
+        return CollectionResult(
+            status="incomplete", observations=[], next_snapshot=None,
+            coverage={"complete": False, "reason": "short_top_window", "items": len(payload), "top": TOP_SNAPSHOT},
+        )
+    items = _valid_items(payload)
     if items is None:
         return CollectionResult(
             status="incomplete",

@@ -40,6 +40,10 @@ def _model(model_id: str, *, likes: int = 1, task: str = "text-generation") -> d
     return {"id": model_id, "likes": likes, "pipeline_tag": task, "trendingScore": likes * 2}
 
 
+def _top100(items: list[dict]) -> list[dict]:
+    return items + [_model(f"fill/model-{index}") for index in range(100 - len(items))]
+
+
 def test_hf_models_and_spaces_still_use_shared_base_name(cfg: PlatformConfig) -> None:
     model_id = "org/Qwen-Image-2.1-GGUF"
     space_id = "org/Qwen-Image-2.1-Demo"
@@ -67,12 +71,14 @@ def test_first_fetch_only_builds_top_100_baseline(cfg: PlatformConfig) -> None:
 def test_only_a_new_entry_inside_top_50_is_a_discovery(cfg: PlatformConfig) -> None:
     old_ids = [f"org/old-{index}" for index in range(100)]
     previous = SourceSnapshot(1, {"ids": old_ids, "slot": "previous"}, NOW)
-    outside = [_model(item) for item in old_ids[:50]] + [_model("org/rank-51-new")]
+    outside = [_model(item) for item in old_ids[:50]] + [_model("org/rank-51-new")] + [
+        _model(item) for item in old_ids[51:]
+    ]
 
     outside_result = huggingface.collect(cfg, previous, NOW, JsonHttp(outside), source_instance="hf:models")
     assert [event for event in outside_result.observations if event.is_discovery] == []
 
-    inside = [_model("org/Qwen-Image-2.1-GGUF", likes=500)] + [_model(item) for item in old_ids[:50]]
+    inside = [_model("org/Qwen-Image-2.1-GGUF", likes=500)] + [_model(item) for item in old_ids[:99]]
     result = huggingface.collect(cfg, previous, NOW, JsonHttp(inside), source_instance="hf:models")
     discoveries = [event for event in result.observations if event.is_discovery]
 
@@ -86,7 +92,7 @@ def test_only_a_new_entry_inside_top_50_is_a_discovery(cfg: PlatformConfig) -> N
 
 def test_same_slot_rerun_does_not_discover_again(cfg: PlatformConfig) -> None:
     previous = SourceSnapshot(1, {"ids": ["org/old"]}, NOW)
-    items = [_model("org/new"), _model("org/old")]
+    items = _top100([_model("org/new"), _model("org/old")])
     first = huggingface.collect(cfg, previous, NOW, JsonHttp(items), source_instance="hf:models")
     advanced = SourceSnapshot(2, first.next_snapshot, NOW)
 
@@ -107,6 +113,18 @@ def test_empty_or_changed_shape_does_not_replace_baseline(cfg: PlatformConfig, p
     assert result.observations == []
 
 
+def test_short_top_100_response_never_advances_baseline(cfg: PlatformConfig) -> None:
+    previous = SourceSnapshot(4, {"ids": [f"org/old-{index}" for index in range(100)]}, NOW)
+    short = [_model(f"org/old-{index}") for index in range(99)]
+
+    result = huggingface.collect(cfg, previous, NOW, JsonHttp(short), source_instance="hf:models")
+
+    assert result.status == "incomplete"
+    assert result.next_snapshot is None
+    assert result.observations == []
+    assert result.coverage["reason"] == "short_top_window"
+
+
 def test_quantized_model_and_demo_merge_only_with_explicit_alias(cfg: PlatformConfig) -> None:
     model_previous = SourceSnapshot(1, {"ids": ["org/old"]}, NOW)
     space_previous = SourceSnapshot(1, {"ids": ["org/old-space"]}, NOW)
@@ -114,13 +132,13 @@ def test_quantized_model_and_demo_merge_only_with_explicit_alias(cfg: PlatformCo
     space_id = "org/Foo-2.1-Demo"
 
     model = huggingface.collect(
-        cfg, model_previous, NOW, JsonHttp([_model(model_id)]), source_instance="hf:models"
+        cfg, model_previous, NOW, JsonHttp(_top100([_model(model_id)])), source_instance="hf:models"
     ).observations[0]
     space = huggingface.collect(
         cfg,
         space_previous,
         NOW,
-        JsonHttp([{"id": space_id, "likes": 4, "sdk": "gradio", "trendingScore": 8}]),
+        JsonHttp(_top100([{"id": space_id, "likes": 4, "sdk": "gradio", "trendingScore": 8}])),
         source_instance="hf:spaces",
     ).observations[0]
     assert model.entity_key != space.entity_key
@@ -130,7 +148,7 @@ def test_quantized_model_and_demo_merge_only_with_explicit_alias(cfg: PlatformCo
         aliased,
         space_previous,
         NOW,
-        JsonHttp([{"id": space_id, "likes": 4, "sdk": "gradio", "trendingScore": 8}]),
+        JsonHttp(_top100([{"id": space_id, "likes": 4, "sdk": "gradio", "trendingScore": 8}])),
         source_instance="hf:spaces",
     ).observations[0]
     assert model.entity_key == aliased_space.entity_key

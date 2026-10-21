@@ -81,6 +81,20 @@ def _site_range(filters: dict[str, str]) -> tuple[datetime, datetime]:
     return start, end
 
 
+def _site_status(item: dict[str, Any], now: datetime) -> str:
+    if not item["enabled"]:
+        return "paused"
+    if item["last_run_status"] in {"failed", "incomplete"}:
+        return item["last_run_status"]
+    if item["version"] is None:
+        return "not_collected"
+    if item["version"] == 1:
+        return "baseline"
+    if item["last_success_at"] < now - timedelta(hours=48):
+        return "stale"
+    return "ok"
+
+
 class ReadQueries:
     def __init__(self, dsn: str, *, schema: str = "public") -> None:
         self.dsn = dsn
@@ -357,7 +371,21 @@ class ReadQueries:
         where = " AND ".join(clauses)
         with connect(self.dsn, schema=self.schema) as connection:
             site = connection.execute(
-                "SELECT id, name, host, enabled FROM radar_sites WHERE id = %s", (parsed_id,)
+                """
+                SELECT sites.id, sites.name, sites.host, sites.enabled,
+                       state.version, state.url_count, state.last_success_at,
+                       latest.status AS last_run_status, latest.finished_at AS last_attempt_at,
+                       latest.result AS last_run_result, latest.error AS last_run_error
+                FROM radar_sites AS sites
+                LEFT JOIN radar_site_state AS state ON state.site_id = sites.id
+                LEFT JOIN LATERAL (
+                    SELECT status, finished_at, result, error
+                    FROM radar_runs
+                    WHERE source_instance = 'site:' || sites.id::text
+                    ORDER BY finished_at DESC, id DESC LIMIT 1
+                ) AS latest ON TRUE
+                WHERE sites.id = %s
+                """, (parsed_id,)
             ).fetchone()
             if site is None:
                 raise ValueError("unknown site")
@@ -379,8 +407,13 @@ class ReadQueries:
             parsed = urlsplit(item["url"])
             item["path"] = parsed.path or "/"
             items.append(item)
+        site_item = dict(site)
+        result = site_item.pop("last_run_result") or {}
+        run_error = site_item.pop("last_run_error") or {}
+        site_item["status"] = _site_status(site_item, datetime.now(timezone.utc))
+        site_item["last_run_reason"] = result.get("reason") or run_error.get("message")
         return {
-            "site": _jsonable(dict(site)),
+            "site": _jsonable(site_item),
             "items": _jsonable(items),
             "total": total,
             "page": page,
@@ -413,19 +446,7 @@ class ReadQueries:
             item = dict(row)
             result = item.pop("last_run_result") or {}
             run_error = item.get("last_run_error") or {}
-            if not item["enabled"]:
-                status = "paused"
-            elif item["last_run_status"] in {"failed", "incomplete"}:
-                status = item["last_run_status"]
-            elif item["version"] is None:
-                status = "not_collected"
-            elif item["version"] == 1:
-                status = "baseline"
-            elif item["last_success_at"] < now - timedelta(hours=48):
-                status = "stale"
-            else:
-                status = "ok"
-            item["status"] = status
+            item["status"] = _site_status(item, now)
             item["added_last_run"] = result.get("added")
             item["removed_last_run"] = result.get("removed")
             item["last_run_reason"] = result.get("reason") or run_error.get("message")

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from datetime import datetime, timedelta
+from datetime import datetime
 
 from .adapters import github, huggingface
 from .models import Lease, PlatformConfig
@@ -41,5 +41,7 @@ def run_source(repo, lease: Lease, cfg: PlatformConfig, now: datetime, http) -> 
         return {"status": result.status, **committed}
     except Exception as exc:
         error = _safe_error(exc)
-        repo.fail_job(lease, error, now + timedelta(minutes=5), now)
+        # The next eight-hour slot creates a fresh job. A delayed retry of this
+        # slot would consume one of its three scheduled source slots instead.
+        repo.fail_job(lease, error, None, now)
         return {"status": "failed", "error": error}

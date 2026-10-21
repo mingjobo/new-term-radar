@@ -58,8 +58,9 @@ class MemoryRepository:
 
     def fail_job(self, lease, error, retry_at, now):
         self.failures.append(lease.job_key)
-        self.jobs[lease.job_key]["status"] = "pending"
-        self.jobs[lease.job_key]["due_at"] = retry_at
+        self.jobs[lease.job_key]["status"] = "pending" if retry_at is not None else "failed"
+        if retry_at is not None:
+            self.jobs[lease.job_key]["due_at"] = retry_at
 
     def finish_job(self, lease, result, now):
         self.jobs[lease.job_key]["status"] = "complete"
@@ -124,6 +125,24 @@ def test_one_source_failure_does_not_block_others(monkeypatch) -> None:
     assert len(repo.commits) == 2
     assert len(repo.failures) == 1
     assert result.status == "partial"
+
+
+def test_failed_source_does_not_displace_next_slot(monkeypatch) -> None:
+    from radar.platform import runner
+
+    repo = MemoryRepository()
+    for name in SOURCES:
+        monkeypatch.setitem(runner.ADAPTERS, name, FailingAdapter() if name == "hf:models" else CompleteAdapter())
+
+    first = _schedule().run_due_sources(repo, CFG, NOW, lambda source: HttpStub(), max_jobs=3)
+    second_at = NOW + timedelta(hours=8)
+    second = _schedule().run_due_sources(repo, CFG, second_at, lambda source: HttpStub(), max_jobs=3)
+
+    assert first.status == "partial"
+    assert second.jobs == 3
+    assert all("2026-10-21T16:00:00Z" in key for key in repo.commits[-2:])
+    assert len(repo.failures) == 2
+    assert repo.jobs["source:hf:models:2026-10-21T08:00:00Z"]["status"] == "failed"
 
 
 def test_incomplete_source_is_not_reported_as_success(monkeypatch) -> None:

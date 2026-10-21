@@ -70,7 +70,7 @@ def test_incomplete_collection_finishes_without_advancing_snapshot(monkeypatch) 
     assert repo.finishes[0][1]["status"] == "incomplete"
 
 
-def test_collection_or_commit_failure_is_recorded_for_retry(monkeypatch) -> None:
+def test_collection_or_commit_failure_is_recorded_without_slot_retry(monkeypatch) -> None:
     for adapter, repository in (
         (Adapter(error=RuntimeError("network unavailable")), FakeRepository()),
         (Adapter(CollectionResult("ok", [], {"ids": []}, {})), FakeRepository(commit_error=RuntimeError("write failed"))),
@@ -80,5 +80,5 @@ def test_collection_or_commit_failure_is_recorded_for_retry(monkeypatch) -> None
         summary = runner.run_source(repository, LEASE, CFG, NOW, object())
 
         assert summary["status"] == "failed"
-        assert repository.failures[0][2] == NOW + timedelta(minutes=5)
+        assert repository.failures[0][2] is None
         assert "RuntimeError" in repository.failures[0][1]["type"]
