@@ -192,7 +192,11 @@ function siteRow(site) {
   counts.append(node("span", "", `新增 ${rangeStatus === "ok" ? site.added_urls ?? 0 : "—"}`),
     node("span", "", `移出 ${rangeStatus === "ok" ? site.removed_urls ?? 0 : "—"}`));
   const button = node("button", "outline-button", "查看页面");
-  button.addEventListener("click", () => { state.site = site.id; state.eventFilters = {type: "all"}; siteDetail(site.id, 1); });
+  button.addEventListener("click", () => {
+    state.site = site.id;
+    state.eventFilters = {type: "all", from: state.siteFilters.from, to: state.siteFilters.to};
+    siteDetail(site.id, 1);
+  });
   row.append(main, counts, button); return row;
 }
 async function competitors(token, page = 1) {
@@ -210,7 +214,7 @@ async function competitors(token, page = 1) {
     const changed = node("input"); changed.type = "checkbox"; changed.checked = filters.changed === "1";
     changedWrap.append(changed, node("span", "", "只看有变化"));
     const status = node("select", "input"); status.setAttribute("aria-label", "站点状态");
-    [["", "全部状态"], ["baseline", "首次建档"], ["ok", "正常"], ["incomplete", "数据不完整"],
+    [["", "全部状态"], ["baseline", "首次建档"], ["ok", "正常"], ["partial", "部分成功"], ["incomplete", "数据不完整"],
       ["failed", "采集失败"], ["not_collected", "未采集"], ["stale", "更新逾期"], ["paused", "已暂停"]]
       .forEach(([value, label]) => { const option = node("option", "", label); option.value = value; status.append(option); });
     status.value = filters.status || "";
@@ -279,7 +283,7 @@ async function siteDetail(siteId, page = 1) {
       const filtered = Boolean(filters.q || filters.from || filters.to || (filters.type && filters.type !== "all"));
       let message = "当天没有页面增减";
       let detail = "这一天的站点地图中没有发现新增或移出的 URL。";
-      if (data.site.status === "paused") {
+      if (data.site.status === "paused" && !filtered) {
         message = "站点监控已暂停";
         detail = "历史记录仍保留，恢复后才会继续采集。";
       } else if (data.site.range_status === "not_collected") {
@@ -288,15 +292,18 @@ async function siteDetail(siteId, page = 1) {
       } else if (data.site.range_status === "failed" || data.site.range_status === "incomplete") {
         message = data.site.range_status === "incomplete" ? "本次采集不完整" : "本次采集失败";
         detail = data.site.last_run_reason || "旧页面清单已保留，这次不会推断页面移出。";
-      } else if (filtered) {
-        message = "没有匹配的页面变化";
-        detail = "可调整筛选条件再查看。";
+      } else if (data.site.range_status === "partial") {
+        message = "所选时段采集不完整";
+        detail = "部分日期尚未完成采集，不能断定整个时段都没有页面变化。";
       } else if (data.site.status === "not_collected") {
         message = "尚未采集站点地图";
         detail = "首次完整采集后才会建立基线。";
       } else if (data.site.status === "baseline") {
         message = "首次建档尚无页面增减";
         detail = "首次完整采集只记录页面清单，不把已有页面算作新增。";
+      } else if (filtered) {
+        message = "没有匹配的页面变化";
+        detail = "可调整筛选条件再查看。";
       } else if (data.site.status === "stale") {
         message = "站点地图尚未更新";
         detail = "最近一次完整采集已超过两天。";

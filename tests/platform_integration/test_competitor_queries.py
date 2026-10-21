@@ -142,3 +142,47 @@ def test_yesterday_success_is_not_todays_zero_change(
     assert page["summary"]["range_complete"] is False
     assert detail["site"]["range_status"] == "not_collected"
     assert detail["total"] == 0
+    uncollected = queries.competitor_sites({**FILTERS, "status": "not_collected"})
+    assert uncollected["total"] == 1
+    assert uncollected["items"][0]["id"] == str(site_id)
+
+
+def test_pausing_after_todays_attempt_keeps_todays_coverage(
+    test_dsn: str, migrated_schema: str, reader_dsn: str
+) -> None:
+    with psycopg.connect(test_dsn) as connection:
+        connection.execute(sql.SQL("SET search_path TO {}").format(sql.Identifier(migrated_schema)))
+        successful = _site(connection, "Paused OK", "paused-ok.example.com", version=2, enabled=False)
+        failed = _site(connection, "Paused failed", "paused-failed.example.com", version=2, enabled=False)
+        _run(connection, f"site:{successful}", "ok")
+        _run(connection, f"site:{failed}", "failed")
+
+    queries = ReadQueries(reader_dsn, schema=migrated_schema)
+    page = queries.competitor_sites(FILTERS)
+    by_name = {item["name"]: item for item in page["items"]}
+    assert by_name["Paused OK"]["range_status"] == "ok"
+    assert by_name["Paused failed"]["range_status"] == "failed"
+    assert page["summary"]["range_complete"] is False
+    assert queries.competitor_events(str(successful), FILTERS)["site"]["range_status"] == "ok"
+
+
+def test_multi_day_range_requires_each_beijing_day_to_be_collected(
+    test_dsn: str, migrated_schema: str, reader_dsn: str
+) -> None:
+    with psycopg.connect(test_dsn) as connection:
+        connection.execute(sql.SQL("SET search_path TO {}").format(sql.Identifier(migrated_schema)))
+        site_id = _site(connection, "Sparse", "sparse.example.com", version=2)
+        connection.execute(
+            "UPDATE radar_sites SET created_at = %s WHERE id = %s",
+            (NOW - timedelta(days=6), site_id),
+        )
+        _run(connection, f"site:{site_id}", "ok")
+
+    queries = ReadQueries(reader_dsn, schema=migrated_schema)
+    filters = {"from": "2026-10-15", "to": "2026-10-21"}
+    page = queries.competitor_sites(filters)
+    detail = queries.competitor_events(str(site_id), filters)
+    assert page["items"][0]["range_status"] == "partial"
+    assert page["summary"]["range_complete"] is False
+    assert detail["site"]["range_status"] == "partial"
+    assert queries.competitor_sites({**filters, "status": "partial"})["total"] == 1

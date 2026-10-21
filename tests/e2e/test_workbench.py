@@ -9,7 +9,7 @@ from wsgiref.simple_server import WSGIRequestHandler, make_server
 from zoneinfo import ZoneInfo
 
 import pytest
-from playwright.sync_api import sync_playwright
+from playwright.sync_api import expect, sync_playwright
 
 from radar.platform.web import create_app
 
@@ -161,7 +161,7 @@ def test_sidebar_and_tabs_exact_labels(page) -> None:
 def test_overview_date_changes_five_values(page) -> None:
     page.locator("#overview-date").fill("2026-10-20")
     page.locator("#overview-date").dispatch_event("change")
-    page.wait_for_function("document.querySelector('[data-metric=new_terms]')?.textContent === '2'")
+    expect(page.locator("[data-metric=new_terms]")).to_have_text("2")
     assert [page.locator(f"[data-metric={key}]").inner_text() for key in (
         "new_terms", "evidence", "changed_sites", "added_urls", "removed_urls"
     )] == ["2", "5", "1", "3", "1"]
@@ -194,6 +194,22 @@ def test_competitor_sites_then_url_rows(page) -> None:
     assert page.locator(".event-row").count() == 2
     page.reload(wait_until="networkidle")
     assert page.get_by_role("button", name="竞品", exact=True).get_attribute("aria-pressed") == "true"
+
+
+def test_competitor_date_range_is_kept_when_opening_site(page, server) -> None:
+    server[1].events_empty = True
+    try:
+        page.goto(page.url.split("#")[0] + "#keywords/competitors", wait_until="networkidle")
+        page.locator(".site-row").first.wait_for()
+        page.get_by_label("从", exact=True).fill("2026-10-15")
+        page.get_by_label("到", exact=True).fill("2026-10-21")
+        page.get_by_role("button", name="筛选").click()
+        page.get_by_role("button", name="查看页面", exact=True).first.click()
+        assert page.get_by_label("从", exact=True).input_value() == "2026-10-15"
+        assert page.get_by_label("到", exact=True).input_value() == "2026-10-21"
+        page.get_by_text("首次建档尚无页面增减").wait_for()
+    finally:
+        server[1].events_empty = False
 
 
 def test_settings_add_pause_resume_and_status(page) -> None:
@@ -250,6 +266,10 @@ def test_empty_failed_and_no_match_states(page, server) -> None:
         assert page.locator("[data-metric=added_urls]").inner_text() == "未采集"
         page.get_by_role("button", name="查看页面", exact=True).first.click()
         page.get_by_text("今天尚未采集站点地图").wait_for()
+        data.range_status = "partial"
+        page.reload(wait_until="networkidle")
+        page.get_by_role("button", name="查看页面", exact=True).first.click()
+        page.get_by_text("所选时段采集不完整").wait_for()
         data.range_status = None
         page.get_by_placeholder("搜索路径").fill("not-a-real-page")
         page.get_by_role("button", name="筛选").click()

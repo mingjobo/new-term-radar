@@ -129,6 +129,51 @@ def test_overview_requires_every_enabled_site_and_source_to_have_collected(
     assert [complete[key] for key in ("new_terms", "evidence", "changed_sites", "added_urls", "removed_urls")] == [0] * 5
 
 
+def test_historical_overview_does_not_change_when_site_is_paused_later(
+    test_dsn: str, migrated_schema: str, reader_dsn: str
+) -> None:
+    with psycopg.connect(test_dsn) as connection:
+        connection.execute(sql.SQL("SET search_path TO {}").format(sql.Identifier(migrated_schema)))
+        collected, missing = uuid.uuid4(), uuid.uuid4()
+        for site_id, name in ((collected, "Collected"), (missing, "Missing")):
+            connection.execute(
+                "INSERT INTO radar_sites (id, name, homepage_url, host, created_at) "
+                "VALUES (%s, %s, %s, %s, %s)",
+                (site_id, name, f"https://{name.lower()}.example.com/", f"{name.lower()}.example.com", NEW),
+            )
+        _run(connection, f"site:{collected}", NEW)
+
+    queries = ReadQueries(reader_dsn, schema=migrated_schema)
+    before_pause = queries.overview(date(2026, 10, 21), NOW)
+    assert before_pause["added_urls"] is None
+
+    with psycopg.connect(test_dsn) as connection:
+        connection.execute(sql.SQL("SET search_path TO {}").format(sql.Identifier(migrated_schema)))
+        connection.execute("UPDATE radar_sites SET enabled = FALSE WHERE id = %s", (missing,))
+
+    after_pause = queries.overview(date(2026, 10, 21), NOW)
+    assert after_pause["added_urls"] is None
+    assert after_pause["removed_urls"] is None
+
+
+def test_today_overview_keeps_collected_site_when_paused_after_run(
+    test_dsn: str, migrated_schema: str, reader_dsn: str
+) -> None:
+    site_id = uuid.uuid4()
+    with psycopg.connect(test_dsn) as connection:
+        connection.execute(sql.SQL("SET search_path TO {}").format(sql.Identifier(migrated_schema)))
+        connection.execute(
+            "INSERT INTO radar_sites (id, name, homepage_url, host, enabled, created_at) "
+            "VALUES (%s, 'Paused', 'https://paused.example.com/', 'paused.example.com', FALSE, %s)",
+            (site_id, NEW),
+        )
+        _run(connection, f"site:{site_id}", NEW)
+
+    queries = ReadQueries(reader_dsn, schema=migrated_schema)
+    result = queries.overview(date(2026, 10, 21), NEW + timedelta(hours=1))
+    assert [result[key] for key in ("changed_sites", "added_urls", "removed_urls")] == [0, 0, 0]
+
+
 def test_daily_terms_merges_sources_per_first_seen_term_and_research_card_keeps_evidence(test_dsn: str, migrated_schema: str, reader_dsn: str) -> None:
     with psycopg.connect(test_dsn) as connection:
         connection.execute(sql.SQL("SET search_path TO {}").format(sql.Identifier(migrated_schema)))

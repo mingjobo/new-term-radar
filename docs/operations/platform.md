@@ -67,6 +67,8 @@ uv run --no-project --with 'psycopg[binary]' \
 
 The WSGI entry point for Vercel is `api/index.py`, selected explicitly by `tool.vercel.entrypoint` in `pyproject.toml`. Vercel's native WSGI routing sends every request to the application; do not add a catch-all rewrite to `/api/index.py`, because current Vercel Python routing exposes that rewritten path to the application. Runtime dependencies must also be declared in `pyproject.toml`, which takes precedence over `requirements.txt` during the Vercel build. `.vercelignore` excludes local environments, probes, test output and caches. The page has no collection or research mutation action. Every route requires Basic Auth, and PostgreSQL separately enforces SELECT-only access for the website role.
 
+The dashboard shows `未采集` instead of a confirmed zero until all three discovery sources or every eligible monitored site has a successful run for the selected Beijing day. A competitor date range is complete only if each eligible site has a successful run on every eligible Beijing day. For past days, site eligibility is conservatively based on whether the site already existed, not its current pause state; V1 does not record historical pause intervals, so a site paused at that time may leave an old day marked uncollected rather than incorrectly certifying zero. On the current day, a paused site remains eligible if it already attempted collection that day, so pausing cannot erase a confirmed result or hide a failed attempt. The site-list date range carries through to the URL detail view, and its status filter follows the displayed range status.
+
 ## Preview deployment
 
 The Vercel Hobby project is `new-term-radar`. The stable preview alias for `codex/free-keyword-platform` is:

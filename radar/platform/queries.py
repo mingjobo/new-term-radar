@@ -110,6 +110,7 @@ class ReadQueries:
         if day > now.astimezone(BEIJING).date():
             raise ValueError("future date is not allowed")
         day_start, day_end = _day_bounds(day)
+        historical = day < now.astimezone(BEIJING).date()
         with connect(self.dsn, schema=self.schema) as connection:
             row = connection.execute(
                 """
@@ -132,10 +133,20 @@ class ReadQueries:
                        AND status IN ('ok', 'baseline')
                        AND finished_at >= %(day_start)s AND finished_at < %(day_end)s) AS sources_collected,
                     (EXISTS(SELECT 1 FROM radar_sites AS sites
-                            WHERE sites.enabled AND sites.created_at < %(day_end)s)
+                            WHERE sites.created_at < %(day_end)s
+                              AND (sites.enabled OR %(historical)s OR EXISTS (
+                                  SELECT 1 FROM radar_runs AS attempted
+                                  WHERE attempted.source_instance = 'site:' || sites.id::text
+                                    AND attempted.finished_at >= %(day_start)s
+                                    AND attempted.finished_at < %(day_end)s)))
                      AND NOT EXISTS(
                          SELECT 1 FROM radar_sites AS sites
-                         WHERE sites.enabled AND sites.created_at < %(day_end)s
+                         WHERE sites.created_at < %(day_end)s
+                           AND (sites.enabled OR %(historical)s OR EXISTS (
+                               SELECT 1 FROM radar_runs AS attempted
+                               WHERE attempted.source_instance = 'site:' || sites.id::text
+                                 AND attempted.finished_at >= %(day_start)s
+                                 AND attempted.finished_at < %(day_end)s))
                            AND NOT EXISTS(
                                SELECT 1 FROM radar_runs AS runs
                                WHERE runs.source_instance = 'site:' || sites.id::text
@@ -152,7 +163,8 @@ class ReadQueries:
                      WHERE status = 'failed' AND finished_at >= %(day_start)s
                        AND finished_at < %(day_end)s) AS failed_runs_today
                 """,
-                {"day_start": day_start, "day_end": day_end, "source_instances": list(SOURCE_INSTANCES)},
+                {"day_start": day_start, "day_end": day_end,
+                 "historical": historical, "source_instances": list(SOURCE_INSTANCES)},
             ).fetchone()
         result = dict(row)
         result["date"] = day.isoformat()
@@ -274,11 +286,14 @@ class ReadQueries:
         if page < 1 or not 1 <= limit <= 100:
             raise ValueError("invalid page or limit")
         start, end = _site_range(filters)
+        from_day = start.astimezone(BEIJING).date()
+        to_day = (end - timedelta(microseconds=1)).astimezone(BEIJING).date()
+        today = datetime.now(timezone.utc).astimezone(BEIJING).date()
         changed = filters.get("changed")
         if changed not in {None, "1", "true"}:
             raise ValueError("invalid changed filter")
         status = filters.get("status")
-        if status and status not in {"paused", "not_collected", "baseline", "ok", "failed", "incomplete", "stale"}:
+        if status and status not in {"paused", "not_collected", "baseline", "ok", "failed", "incomplete", "stale", "partial"}:
             raise ValueError("invalid site status")
         conditions = []
         where_params: list[Any] = []
@@ -289,7 +304,8 @@ class ReadQueries:
         if changed:
             conditions.append("(added_urls + removed_urls) > 0")
         if status:
-            conditions.append("status = %s")
+            conditions.append("(CASE WHEN status = 'paused' THEN status "
+                              "WHEN range_status = 'ok' THEN status ELSE range_status END) = %s")
             where_params.append(status)
         where = "WHERE " + " AND ".join(conditions) if conditions else ""
         base = """
@@ -307,7 +323,14 @@ class ReadQueries:
                        state.version, state.url_count, state.last_success_at,
                        latest.status AS last_run_status, latest.finished_at AS last_attempt_at,
                        latest.result AS last_run_result,
-                       COALESCE(period.status, 'not_collected') AS range_status,
+                       coverage.expected_days, coverage.covered_days,
+                       CASE
+                         WHEN coverage.expected_days = 0 THEN 'not_collected'
+                         WHEN coverage.covered_days = coverage.expected_days THEN 'ok'
+                         WHEN period.status IN ('failed', 'incomplete') THEN period.status
+                         WHEN coverage.covered_days > 0 THEN 'partial'
+                         ELSE 'not_collected'
+                       END AS range_status,
                        COALESCE(events.added_urls, 0) AS added_urls,
                        COALESCE(events.removed_urls, 0) AS removed_urls,
                        events.latest_change_at,
@@ -334,9 +357,32 @@ class ReadQueries:
                       AND finished_at >= %s AND finished_at < %s
                     ORDER BY finished_at DESC, id DESC LIMIT 1
                 ) AS period ON TRUE
+                LEFT JOIN LATERAL (
+                    SELECT count(*) AS expected_days,
+                           count(*) FILTER (WHERE daily.was_collected) AS covered_days
+                    FROM generate_series(%s::date, %s::date, interval '1 day') AS days(day_at)
+                    LEFT JOIN LATERAL (
+                        SELECT EXISTS (
+                            SELECT 1 FROM radar_runs AS runs
+                            WHERE runs.source_instance = 'site:' || sites.id::text
+                              AND runs.status = 'ok'
+                              AND runs.finished_at >= (days.day_at::date::timestamp AT TIME ZONE 'Asia/Shanghai')
+                              AND runs.finished_at < ((days.day_at::date + 1)::timestamp AT TIME ZONE 'Asia/Shanghai')
+                        ) AS was_collected,
+                        EXISTS (
+                            SELECT 1 FROM radar_runs AS attempted
+                            WHERE attempted.source_instance = 'site:' || sites.id::text
+                              AND attempted.finished_at >= (days.day_at::date::timestamp AT TIME ZONE 'Asia/Shanghai')
+                              AND attempted.finished_at < ((days.day_at::date + 1)::timestamp AT TIME ZONE 'Asia/Shanghai')
+                        ) AS was_attempted
+                    ) AS daily ON TRUE
+                    WHERE days.day_at::date >= (sites.created_at AT TIME ZONE 'Asia/Shanghai')::date
+                      AND (days.day_at::date < %s::date OR sites.enabled OR daily.was_attempted)
+                ) AS coverage ON TRUE
             )
         """
-        params = [start, end, datetime.now(timezone.utc) - timedelta(hours=48), start, end] + where_params
+        params = [start, end, datetime.now(timezone.utc) - timedelta(hours=48),
+                  start, end, from_day, to_day, today] + where_params
         with connect(self.dsn, schema=self.schema) as connection:
             totals = connection.execute(
                 base + f"""
@@ -344,8 +390,8 @@ class ReadQueries:
                        COALESCE(sum(added_urls), 0)::bigint AS added_urls,
                        COALESCE(sum(removed_urls), 0)::bigint AS removed_urls,
                        count(*) FILTER (WHERE status IN ('failed', 'incomplete', 'stale')) AS abnormal_sites,
-                       (count(*) FILTER (WHERE enabled) > 0 AND
-                        COALESCE(bool_and(NOT enabled OR range_status = 'ok'), FALSE)) AS range_complete
+                       (count(*) FILTER (WHERE expected_days > 0) > 0 AND
+                        COALESCE(bool_and(expected_days = 0 OR covered_days = expected_days), FALSE)) AS range_complete
                 FROM base {where}
                 """,
                 params,
@@ -376,6 +422,9 @@ class ReadQueries:
         except ValueError as exc:
             raise ValueError("invalid site ID") from exc
         start, end = _site_range(filters)
+        from_day = start.astimezone(BEIJING).date()
+        to_day = (end - timedelta(microseconds=1)).astimezone(BEIJING).date()
+        today = datetime.now(timezone.utc).astimezone(BEIJING).date()
         event_type = filters.get("type", "all")
         if event_type not in {"all", "added", "removed"}:
             raise ValueError("invalid event type")
@@ -392,7 +441,7 @@ class ReadQueries:
         with connect(self.dsn, schema=self.schema) as connection:
             site = connection.execute(
                 """
-                SELECT sites.id, sites.name, sites.host, sites.enabled,
+                SELECT sites.id, sites.name, sites.host, sites.enabled, sites.created_at,
                        state.version, state.url_count, state.last_success_at,
                        latest.status AS last_run_status, latest.finished_at AS last_attempt_at,
                        latest.result AS last_run_result, latest.error AS last_run_error
@@ -409,6 +458,31 @@ class ReadQueries:
             ).fetchone()
             if site is None:
                 raise ValueError("unknown site")
+            coverage = connection.execute(
+                """
+                SELECT count(*) AS expected_days,
+                       count(*) FILTER (WHERE daily.was_collected) AS covered_days
+                FROM generate_series(%s::date, %s::date, interval '1 day') AS days(day_at)
+                LEFT JOIN LATERAL (
+                    SELECT EXISTS (
+                        SELECT 1 FROM radar_runs AS runs
+                        WHERE runs.source_instance = %s
+                          AND runs.status = 'ok'
+                          AND runs.finished_at >= (days.day_at::date::timestamp AT TIME ZONE 'Asia/Shanghai')
+                          AND runs.finished_at < ((days.day_at::date + 1)::timestamp AT TIME ZONE 'Asia/Shanghai')
+                    ) AS was_collected,
+                    EXISTS (
+                        SELECT 1 FROM radar_runs AS attempted
+                        WHERE attempted.source_instance = %s
+                          AND attempted.finished_at >= (days.day_at::date::timestamp AT TIME ZONE 'Asia/Shanghai')
+                          AND attempted.finished_at < ((days.day_at::date + 1)::timestamp AT TIME ZONE 'Asia/Shanghai')
+                    ) AS was_attempted
+                ) AS daily ON TRUE
+                WHERE days.day_at::date >= %s::date
+                  AND (days.day_at::date < %s::date OR %s OR daily.was_attempted)
+                """, (from_day, to_day, f"site:{parsed_id}", f"site:{parsed_id}",
+                      site["created_at"].astimezone(BEIJING).date(), today, site["enabled"]),
+            ).fetchone()
             period = connection.execute(
                 """
                 SELECT status FROM radar_runs
@@ -438,7 +512,16 @@ class ReadQueries:
         result = site_item.pop("last_run_result") or {}
         run_error = site_item.pop("last_run_error") or {}
         site_item["status"] = _site_status(site_item, datetime.now(timezone.utc))
-        site_item["range_status"] = period["status"] if period else "not_collected"
+        if coverage["expected_days"] == 0:
+            site_item["range_status"] = "not_collected"
+        elif coverage["covered_days"] == coverage["expected_days"]:
+            site_item["range_status"] = "ok"
+        elif period and period["status"] in {"failed", "incomplete"}:
+            site_item["range_status"] = period["status"]
+        elif coverage["covered_days"]:
+            site_item["range_status"] = "partial"
+        else:
+            site_item["range_status"] = "not_collected"
         site_item["last_run_reason"] = result.get("reason") or run_error.get("message")
         return {
             "site": _jsonable(site_item),
