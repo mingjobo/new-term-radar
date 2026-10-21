@@ -48,6 +48,7 @@ The dashboard reads only through `RADAR_READ_DATABASE_URL`; it deliberately refu
 
 - `RADAR_WEB_USERNAME`: the Basic Auth username.
 - `RADAR_WEB_PASSWORD_SHA256`: the lowercase SHA-256 digest of the password, never the plain-text password.
+- `RADAR_WEB_ALLOWED_ORIGINS`: comma-separated exact website origins (for example, the protected Vercel preview URL). Required only when `RADAR_SITE_ADMIN_DATABASE_URL` enables settings writes. Browser writes require an authenticated same-origin JSON request; no Origin or a mismatched Host is rejected.
 
 Run the local preview after exporting those three variables:
 
