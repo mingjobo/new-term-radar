@@ -10,6 +10,18 @@ from radar.platform.models import CollectionResult, EvidenceInput
 from radar.platform.repository import LeaseLost, Repository
 
 
+def test_claim_due_filters_source_jobs_from_site_jobs(repository: Repository) -> None:
+    from datetime import datetime, timezone
+
+    now = datetime(2026, 10, 21, 8, 17, tzinfo=timezone.utc)
+    assert repository.enqueue("site:one:day", "collect-site", now, {"site_id": "one"})
+    assert repository.enqueue("source:github:slot", "collect-source", now, {"source_instance": "github:breakout"})
+
+    leases = repository.claim_due(now, limit=2, task="collect-source")
+
+    assert [lease.job_key for lease in leases] == ["source:github:slot"]
+
+
 NOW = datetime(2026, 10, 15, 2, 0, tzinfo=timezone.utc)
 
 

@@ -47,6 +47,13 @@ def repo_term(name: str) -> str:
     return re.sub(r"[-_.]+", " ", name).strip().lower()
 
 
+def qualifies(stars: int, age_days: float, delta_24h: int | None, velocity_min: int, delta_min: int) -> bool:
+    """Use unrounded velocity for the discovery threshold; rounding is display-only."""
+    if age_days <= 0:
+        raise ValueError("age_days must be positive")
+    return stars / age_days >= velocity_min or (delta_24h is not None and delta_24h >= delta_min)
+
+
 def score(repos: list[dict], before: dict[str, int] | None, now: datetime,
           velocity_min: int = 200, delta_min: int = 400) -> list[dict]:
     """Repos that break out, fastest first. `repos` items are GitHub search results."""
@@ -57,7 +64,7 @@ def score(repos: list[dict], before: dict[str, int] | None, now: datetime,
         stars = r["stargazers_count"]
         velocity = stars / age
         delta = stars - before[r["full_name"]] if before and r["full_name"] in before else None
-        if velocity < velocity_min and (delta is None or delta < delta_min):
+        if not qualifies(stars, age, delta, velocity_min, delta_min):
             continue
         owner, name = r["full_name"].split("/", 1)
         out.append({"repo": r["full_name"], "owner": owner, "name": name, "stars": stars,

@@ -45,7 +45,7 @@ class Repository:
             )
             return cursor.rowcount == 1
 
-    def claim_due(self, now: datetime, *, limit: int = 1, lease_seconds: int = 300) -> list[Lease]:
+    def claim_due(self, now: datetime, *, limit: int = 1, lease_seconds: int = 300, task: str | None = None) -> list[Lease]:
         _aware(now, "now")
         if limit <= 0 or lease_seconds <= 0:
             raise ValueError("limit and lease_seconds must be positive")
@@ -57,6 +57,7 @@ class Repository:
                     SELECT job_key
                     FROM radar_jobs
                     WHERE scheduled_for <= %(now)s
+                      AND (%(task)s::text IS NULL OR task = %(task)s::text)
                       AND (
                         status = 'pending'
                         OR (status = 'leased' AND lease_expires_at <= %(now)s)
@@ -75,7 +76,7 @@ class Repository:
                 WHERE jobs.job_key = due.job_key
                 RETURNING jobs.job_key, jobs.lease_token, jobs.task, jobs.payload, jobs.scheduled_for
                 """,
-                {"now": now, "limit": limit, "token": token, "lease_seconds": lease_seconds},
+                {"now": now, "limit": limit, "token": token, "lease_seconds": lease_seconds, "task": task},
             ).fetchall()
         return [
             Lease(

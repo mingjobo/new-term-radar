@@ -179,7 +179,7 @@ def main(argv: list[str] | None = None) -> int:
     arguments = sys.argv[1:] if argv is None else argv
     if arguments[:1] == ["mcp"]:
         return serve_mcp()
-    if arguments[:1] and arguments[0] in {"config-check", "migrate", "serve"}:
+    if arguments[:1] and arguments[0] in {"collect", "config-check", "migrate", "serve"}:
         from .platform.commands import run_platform_command
 
         return run_platform_command(arguments[0], arguments[1:])

@@ -14,7 +14,7 @@
       "min_stars": 300,
       "velocity_min": 200,
       "delta_min": 400,
-      "pages": 2
+      "pages": 10
     },
     "hf:models": {
       "provider": "huggingface",

@@ -2,11 +2,14 @@ from __future__ import annotations
 
 import json
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 import pytest
 
 from radar.platform.adapters import github
 from radar.platform.models import HttpResponse, PlatformConfig, SourceSnapshot
+from radar.platform.config import load_config
+from radar import breakout
 
 
 NOW = datetime(2026, 10, 15, 8, 17, tzinfo=timezone.utc)
@@ -62,6 +65,32 @@ def _page(items: list[dict], *, total: int | None = None, incomplete: bool = Fal
 
 def _observed(stars: int, hours_ago: int) -> dict:
     return {"observed_at": (NOW - timedelta(hours=hours_ago)).isoformat(), "stars": stars}
+
+
+def test_github_threshold_is_shared_by_legacy_and_free(cfg: PlatformConfig) -> None:
+    # 199.5/day must not pass a 200/day bar just because display metrics round to 200.
+    repo = _repo(stars=1995, age_hours=240)
+    assert breakout.score([repo], None, NOW, velocity_min=200, delta_min=400) == []
+
+    result = github.collect(cfg, SourceSnapshot(0, {}, None), NOW, GithubHttp([_page([repo])]), source_instance="github:breakout")
+
+    assert [event for event in result.observations if event.is_discovery] == []
+
+
+def test_default_free_config_fetches_all_246_repositories() -> None:
+    config = load_config(Path(__file__).resolve().parents[2] / "config/platform.json")
+    items = [_repo(repo_id=index + 1, stars=1000, age_hours=48, name=f"Acme/Fast-{index}") for index in range(246)]
+    http = GithubHttp([
+        _page(items[:100], total=246),
+        _page(items[100:200], total=246),
+        _page(items[200:], total=246),
+    ])
+
+    result = github.collect(config, SourceSnapshot(1, {"repos": {}, "flagged": {}}, NOW), NOW, http, source_instance="github:breakout")
+
+    assert result.status == "ok"
+    assert result.coverage == {"complete": True, "items": 246, "total": 246}
+    assert len(http.urls) == 3
 
 
 def test_fast_new_repo_is_discovered_with_real_identity_and_time(cfg: PlatformConfig) -> None:

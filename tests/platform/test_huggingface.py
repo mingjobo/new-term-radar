@@ -8,6 +8,7 @@ import pytest
 
 from radar.platform.adapters import huggingface
 from radar.platform.models import HttpResponse, PlatformConfig, SourceSnapshot
+from radar import sources
 
 
 NOW = datetime(2026, 10, 15, 8, 17, tzinfo=timezone.utc)
@@ -37,6 +38,14 @@ def cfg() -> PlatformConfig:
 
 def _model(model_id: str, *, likes: int = 1, task: str = "text-generation") -> dict:
     return {"id": model_id, "likes": likes, "pipeline_tag": task, "trendingScore": likes * 2}
+
+
+def test_hf_models_and_spaces_still_use_shared_base_name(cfg: PlatformConfig) -> None:
+    model_id = "org/Qwen-Image-2.1-GGUF"
+    space_id = "org/Qwen-Image-2.1-Demo"
+    assert sources.base_name(model_id) == "qwen image 2.1"
+    assert huggingface._name(model_id, "models") == "qwen image 2.1"
+    assert huggingface._name(space_id, "spaces") == "qwen image 2.1"
 
 
 def test_first_fetch_only_builds_top_100_baseline(cfg: PlatformConfig) -> None:

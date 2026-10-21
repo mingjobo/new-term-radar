@@ -8,7 +8,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 from urllib.parse import quote
 
-from ...breakout import repo_term
+from ...breakout import qualifies, repo_term
 
 from ..models import CollectionResult, EvidenceInput, HttpResponse, PlatformConfig, SourceSnapshot
 from ..normalize import canonical_key
@@ -73,7 +73,7 @@ def _settings(cfg: PlatformConfig) -> dict[str, int]:
         "min_stars": int(raw.get("min_stars", 300)),
         "velocity_min": int(raw.get("velocity_min", 200)),
         "delta_min": int(raw.get("delta_min", 400)),
-        "pages": int(raw.get("pages", 2)),
+        "pages": int(raw.get("pages", 10)),
     }
 
 
@@ -154,12 +154,12 @@ def collect(
         velocity = round(stars / age_days)
         daily_observation, daily_time = _nearest_daily(histories.get(repo_id, []), now)
         delta = None if daily_observation is None else stars - int(daily_observation["stars"])
-        qualifies = (
+        meets_bar = (
             age_days <= settings["window_days"]
             and stars >= settings["min_stars"]
-            and (velocity >= settings["velocity_min"] or (delta is not None and delta >= settings["delta_min"]))
+            and qualifies(stars, age_days, delta, settings["velocity_min"], settings["delta_min"])
         )
-        is_discovery = qualifies and repo_id not in flagged
+        is_discovery = meets_bar and repo_id not in flagged
         if is_discovery:
             flagged[repo_id] = now.date().isoformat()
         metrics = {
