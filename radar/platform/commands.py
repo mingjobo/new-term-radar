@@ -4,7 +4,6 @@ import argparse
 import json
 import os
 from pathlib import Path
-from typing import Sequence
 from wsgiref.simple_server import make_server
 
 from .config import load_config
@@ -27,7 +26,7 @@ def _config_check(path: Path) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="python -m radar_platform")
+    parser = argparse.ArgumentParser(prog="python -m radar")
     commands = parser.add_subparsers(dest="command", required=True)
     config_check = commands.add_parser("config-check", help="validate and summarize the free platform config")
     config_check.add_argument("--config", type=Path, default=Path("config/platform.json"))
@@ -41,8 +40,8 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def main(argv: Sequence[str] | None = None) -> int:
-    args = build_parser().parse_args(argv)
+def run_platform_command(command: str, argv: list[str]) -> int:
+    args = build_parser().parse_args([command, *argv])
     if args.command == "config-check":
         return _config_check(args.config)
     if args.command == "migrate":
@@ -59,7 +58,3 @@ def main(argv: Sequence[str] | None = None) -> int:
             server.serve_forever()
         return 0
     raise AssertionError(f"unhandled command: {args.command}")
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())

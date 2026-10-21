@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from radar_platform.models import CollectionResult, EvidenceInput
+from radar.platform.models import CollectionResult, EvidenceInput
 from scripts.platform_probe import expand_sources, summarize
 
 

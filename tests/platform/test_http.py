@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import pytest
 
-from radar_platform.http import BudgetExceeded, HttpClient, UnsafeUrl
-from radar_platform.models import HttpResponse
+from radar.platform.http import BudgetExceeded, HttpClient, UnsafeUrl
+from radar.platform.models import HttpResponse
 
 
 class StubTransport:

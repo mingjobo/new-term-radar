@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from radar_platform.models import EvidenceInput
-from radar_platform.normalize import canonical_key, normalize_text
+from radar.platform.models import EvidenceInput
+from radar.platform.normalize import canonical_key, normalize_text
 
 
 def _event(*, entity_key: str, name: str, observed_at) -> EvidenceInput:

@@ -6,8 +6,8 @@ from datetime import datetime, timezone
 
 import pytest
 
-from radar_platform.adapters import huggingface
-from radar_platform.models import HttpResponse, PlatformConfig, SourceSnapshot
+from radar.platform.adapters import huggingface
+from radar.platform.models import HttpResponse, PlatformConfig, SourceSnapshot
 
 
 NOW = datetime(2026, 10, 15, 8, 17, tzinfo=timezone.utc)

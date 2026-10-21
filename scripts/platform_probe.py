@@ -13,13 +13,13 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from radar_platform.adapters import github, huggingface  # noqa: E402
-from radar_platform.config import load_config  # noqa: E402
-from radar_platform.db import validate_test_database_url  # noqa: E402
-from radar_platform.http import HttpClient  # noqa: E402
-from radar_platform.models import CollectionResult, SourceSnapshot  # noqa: E402
-from radar_platform.repository import Repository  # noqa: E402
-from radar_platform.runner import run_source  # noqa: E402
+from radar.platform.adapters import github, huggingface  # noqa: E402
+from radar.platform.config import load_config  # noqa: E402
+from radar.platform.db import validate_test_database_url  # noqa: E402
+from radar.platform.http import HttpClient  # noqa: E402
+from radar.platform.models import CollectionResult, SourceSnapshot  # noqa: E402
+from radar.platform.repository import Repository  # noqa: E402
+from radar.platform.runner import run_source  # noqa: E402
 
 
 SOURCE_ALIASES = {

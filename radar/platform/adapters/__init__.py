@@ -4,7 +4,7 @@ import json
 from datetime import datetime, timezone
 from typing import Any
 
-from radar_platform.models import HttpResponse
+from ..models import HttpResponse
 
 
 class AdapterError(RuntimeError):

@@ -7,7 +7,7 @@ import json
 
 import pytest
 
-from radar_platform.web import create_app, create_app_from_env, safe_external_url
+from radar.platform.web import create_app, create_app_from_env, safe_external_url
 
 
 USERNAME = "researcher"

@@ -39,7 +39,12 @@ entrypoint = "api.index:app"
 # The code lives in radar/ so `python -m radar` works from a clone. Installed, the
 # package is `new_term_radar`: PyPI already has an unrelated project that owns `radar`.
 [tool.setuptools]
-packages = ["new_term_radar"]
+packages = ["new_term_radar", "new_term_radar.platform", "new_term_radar.platform.adapters"]
 
 [tool.setuptools.package-dir]
 new_term_radar = "radar"
+"new_term_radar.platform" = "radar/platform"
+"new_term_radar.platform.adapters" = "radar/platform/adapters"
+
+[tool.setuptools.package-data]
+"new_term_radar.platform" = ["templates/*.html", "static/*.js", "static/*.css"]

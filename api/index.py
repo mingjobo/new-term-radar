@@ -6,7 +6,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from radar_platform.web import create_app_from_env
+from radar.platform.web import create_app_from_env
 
 
 app = create_app_from_env()

@@ -39,7 +39,7 @@ Run the local preview after exporting those three variables:
 
 ```bash
 uv run --no-project --with 'psycopg[binary]' \
-  python -m radar_platform serve --host 127.0.0.1 --port 8000
+  python -m radar serve --host 127.0.0.1 --port 8000
 ```
 
 The WSGI entry point for Vercel is `api/index.py`, selected explicitly by `tool.vercel.entrypoint` in `pyproject.toml`. Vercel's native WSGI routing sends every request to the application; do not add a catch-all rewrite to `/api/index.py`, because current Vercel Python routing exposes that rewritten path to the application. Runtime dependencies must also be declared in `pyproject.toml`, which takes precedence over `requirements.txt` during the Vercel build. `.vercelignore` excludes local environments, probes, test output and caches. The page has no collection or research mutation action. Every route requires Basic Auth, and PostgreSQL separately enforces SELECT-only access for the website role.
@@ -58,7 +58,7 @@ Run migrations deliberately; application startup never creates or changes tables
 
 ```bash
 uv run --no-project --with 'psycopg[binary]' \
-  python -m radar_platform migrate \
+  python -m radar migrate \
   --database-env RADAR_MIGRATION_DATABASE_URL
 ```
 

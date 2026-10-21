@@ -6,10 +6,10 @@ from dataclasses import replace
 from datetime import datetime
 from typing import Any
 
-from radar.sources import SPACE_NOISE, base_name
+from ...sources import SPACE_NOISE, base_name
 
-from radar_platform.models import CollectionResult, EvidenceInput, HttpResponse, PlatformConfig, SourceSnapshot
-from radar_platform.normalize import canonical_key
+from ..models import CollectionResult, EvidenceInput, HttpResponse, PlatformConfig, SourceSnapshot
+from ..normalize import canonical_key
 
 from . import json_body, slot_for
 

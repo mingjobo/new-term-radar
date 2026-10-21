@@ -8,10 +8,10 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 from urllib.parse import quote
 
-from radar.breakout import repo_term
+from ...breakout import repo_term
 
-from radar_platform.models import CollectionResult, EvidenceInput, HttpResponse, PlatformConfig, SourceSnapshot
-from radar_platform.normalize import canonical_key
+from ..models import CollectionResult, EvidenceInput, HttpResponse, PlatformConfig, SourceSnapshot
+from ..normalize import canonical_key
 
 from . import json_body, slot_for
 

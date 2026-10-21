@@ -6,8 +6,8 @@ import psycopg
 import pytest
 from psycopg import sql
 
-from radar_platform.models import CollectionResult, EvidenceInput
-from radar_platform.repository import LeaseLost, Repository
+from radar.platform.models import CollectionResult, EvidenceInput
+from radar.platform.repository import LeaseLost, Repository
 
 
 NOW = datetime(2026, 10, 15, 2, 0, tzinfo=timezone.utc)

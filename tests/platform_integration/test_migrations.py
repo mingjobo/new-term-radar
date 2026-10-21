@@ -6,8 +6,8 @@ import psycopg
 import pytest
 from psycopg import sql
 
-from radar_platform.db import DatabaseSafetyError, validate_test_database_url
-from radar_platform.migrations import MigrationChecksumError, apply_migrations
+from radar.platform.db import DatabaseSafetyError, validate_test_database_url
+from radar.platform.migrations import MigrationChecksumError, apply_migrations
 
 
 ROOT = Path(__file__).resolve().parents[2]

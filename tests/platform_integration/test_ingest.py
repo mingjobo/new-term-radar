@@ -7,10 +7,10 @@ from pathlib import Path
 import psycopg
 from psycopg import sql
 
-from radar_platform.config import load_config
-from radar_platform.models import HttpResponse
-from radar_platform.repository import Repository
-from radar_platform.runner import run_source
+from radar.platform.config import load_config
+from radar.platform.models import HttpResponse
+from radar.platform.repository import Repository
+from radar.platform.runner import run_source
 
 
 ROOT = Path(__file__).resolve().parents[2]

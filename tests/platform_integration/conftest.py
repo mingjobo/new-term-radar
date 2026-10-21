@@ -9,9 +9,9 @@ import psycopg
 import pytest
 from psycopg import sql
 
-from radar_platform.db import validate_test_database_url
-from radar_platform.migrations import apply_migrations
-from radar_platform.repository import Repository
+from radar.platform.db import validate_test_database_url
+from radar.platform.migrations import apply_migrations
+from radar.platform.repository import Repository
 
 
 @pytest.fixture(scope="session")

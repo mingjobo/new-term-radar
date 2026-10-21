@@ -176,8 +176,13 @@ def serve_mcp() -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
-    if (sys.argv[1:] if argv is None else argv)[:1] == ["mcp"]:
+    arguments = sys.argv[1:] if argv is None else argv
+    if arguments[:1] == ["mcp"]:
         return serve_mcp()
+    if arguments[:1] and arguments[0] in {"config-check", "migrate", "serve"}:
+        from .platform.commands import run_platform_command
+
+        return run_platform_command(arguments[0], arguments[1:])
     prog = "python -m radar" if __package__ == "radar" else "new-term-radar"  # installed, the package has another name
     p = argparse.ArgumentParser(prog=prog, description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("command", choices=["daily", "sources", "keywords", "leads", "pains"])

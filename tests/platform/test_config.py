@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from radar_platform.config import ConfigError, load_config
+from radar.platform.config import ConfigError, load_config
 
 
 ROOT = Path(__file__).resolve().parents[2]
