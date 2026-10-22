@@ -34,7 +34,7 @@ Use the Neon console or secret manager to obtain these values. Do not put them i
 
 After the site-admin role adds a site through settings, the next daily collector run reads its public robots.txt and complete Sitemap. The first complete run saves URLs without emitting change events. Later complete runs compare URL sets; an incomplete or failed read retains the previous baseline. Pausing a site keeps its history and prevents new daily jobs. This collector uses only `RADAR_WRITE_DATABASE_URL` and never accepts the site-admin or reader URL as a fallback.
 
-For a manual development-branch check only:
+For a manual development-branch check, or a deliberate production check with the matching writer-role environment:
 
 ```bash
 python -m radar collect --kind sites --max-jobs 20
@@ -44,42 +44,41 @@ The job key is one per site per Beijing calendar day. Repeating the command on t
 
 ## Free GitHub Actions collector
 
-`.github/workflows/free-platform.yml` is the only V1 collector workflow. Its source slot is UTC 00:00, 08:00 and 16:00 (GitHub, HF Models, HF Spaces); its site slot is UTC 01:30 daily. GitHub Actions scheduled workflows run only after this workflow reaches the repository default branch, and the job remains **off** unless the repository variable `FREE_RADAR_ENABLED` is exactly `true`. Keep the old `RADAR_ENABLED` variable unset; it controls the separate upstream/paid workflow.
+`.github/workflows/free-platform.yml` is the only V1 collector workflow. Its GitHub/HF source slots are UTC 00:00, 08:00 and 16:00 (Beijing 08:00, 16:00 and next-day 00:00). Its daily competitor Sitemap slot is UTC 01:30 (Beijing 09:30). GitHub may start a scheduled job after its nominal time. Each site run handles at most 20 jobs; sites left over are uncollected, not confirmed zero-change. Scheduled workflows run only from `main` after `FREE_RADAR_ENABLED` is exactly `true`. Keep the old `RADAR_ENABLED` variable unset or `false`; it controls the separate upstream/paid workflow.
 
-For the development preview, create a protected GitHub Actions environment named `free-radar-dev` containing only the development-branch writer secret `RADAR_WRITE_DATABASE_URL`. If the production schedule is later enabled, use a separate `free-radar-production` environment containing the **production-branch** writer secret under the same key. The workflow picks the environment by event type, so a production cron cannot use the development credential. The workflow also receives GitHub's short-lived `GITHUB_TOKEN`; it must not receive the reader, site-admin, migrator, legacy Trends or paid API secrets. A manual `workflow_dispatch` run accepts `kind=sources|sites` only from `codex/free-keyword-platform`, and must be explicitly chosen in GitHub Actions. GitHub requires the workflow file to exist on the default branch before the manual Run workflow control is available; a file present only on the development branch cannot yet be dispatched. A failed or incomplete source returns a nonzero job status and does not advance its baseline. Inspect the JSON collector summary and fix the cause; the next eight-hour slot creates a fresh job automatically. A normal same-slot rerun does not reclaim a terminal job. Same-slot recovery requires a deliberate, reviewed requeue of that exact development job key. Neon, not Actions cache, holds job and snapshot state.
+The `free-radar-dev` GitHub Actions environment contains only the development Neon writer secret `RADAR_WRITE_DATABASE_URL`. The separate `free-radar-production` environment contains only the production Neon writer secret under the same name. The workflow picks the environment by branch: `main` uses production, `codex/free-keyword-platform` uses development. It also receives GitHub's short-lived `GITHUB_TOKEN`; it must not receive reader, site-admin, migrator, legacy Trends or paid API secrets. A manual `workflow_dispatch` run accepts `kind=sources|sites` on those two branches. Manual runs do **not** enable cron; first run both modes on `main` and verify production Neon before setting `FREE_RADAR_ENABLED=true`. A failed or incomplete source returns a nonzero job status and does not advance its baseline. Inspect the JSON collector summary and fix the cause; the next eight-hour slot creates a fresh job automatically. A normal same-slot rerun does not reclaim a terminal job. Same-slot recovery requires a deliberate, reviewed requeue of that exact job key. Neon, not Actions cache, holds job and snapshot state.
 
-Do not set `FREE_RADAR_ENABLED=true` or broaden the manual branch guard until the preview and its separate permissions have been accepted. Production enablement, production migration and default-branch merge are separate decisions.
+Do not set `FREE_RADAR_ENABLED=true` until the production permissions, public website, and both manual collector modes have been accepted.
 
-## Read-only website
+## Public website
 
-The dashboard reads only through `RADAR_READ_DATABASE_URL`; it deliberately refuses to fall back to the writer or legacy `DATABASE_URL`. Configure these additional server-side values:
+The dashboard reads through `RADAR_READ_DATABASE_URL`; it deliberately refuses to fall back to the writer or legacy `DATABASE_URL`. There is no website account, Basic Auth, password, passcode, or login session. Any visitor can read the data. If settings writes are enabled, any visitor can also add, edit, pause, and resume monitored competitors. This is an accepted first-version risk, not an access-control guarantee. Configure these additional server-side values:
 
-- `RADAR_WEB_USERNAME`: the Basic Auth username.
-- `RADAR_WEB_PASSWORD_SHA256`: the lowercase SHA-256 digest of the password, never the plain-text password.
-- `RADAR_WEB_ALLOWED_ORIGINS`: comma-separated exact website origins (for example, the protected Vercel preview URL). Required only when `RADAR_SITE_ADMIN_DATABASE_URL` enables settings writes. Browser writes require an authenticated same-origin JSON request; no Origin or a mismatched Host is rejected.
+- `RADAR_SITE_ADMIN_DATABASE_URL`: separate, narrowly scoped site-configuration role, required for settings writes. Never substitute the collector writer URL.
+- `RADAR_WEB_ALLOWED_ORIGINS`: comma-separated exact HTTPS website origins. Required when the site-admin URL enables settings writes. Browser writes require a same-origin JSON request; a missing Origin or mismatched Host is rejected. This check does not authenticate a person.
 
-Run the local preview after exporting those three variables:
+Run the local website after exporting the reader URL and, if needed, the site-admin URL plus allowed origin:
 
 ```bash
 uv run --no-project --with 'psycopg[binary]' \
   python -m radar serve --host 127.0.0.1 --port 8000
 ```
 
-The WSGI entry point for Vercel is `api/index.py`, selected explicitly by `tool.vercel.entrypoint` in `pyproject.toml`. Vercel's native WSGI routing sends every request to the application; do not add a catch-all rewrite to `/api/index.py`, because current Vercel Python routing exposes that rewritten path to the application. Runtime dependencies must also be declared in `pyproject.toml`, which takes precedence over `requirements.txt` during the Vercel build. `.vercelignore` excludes local environments, probes, test output and caches. The page has no collection or research mutation action. Every route requires Basic Auth, and PostgreSQL separately enforces SELECT-only access for the website role.
+The WSGI entry point for Vercel is `api/index.py`, selected explicitly by `tool.vercel.entrypoint` in `pyproject.toml`. Vercel's native WSGI routing sends every request to the application; do not add a catch-all rewrite to `/api/index.py`, because current Vercel Python routing exposes that rewritten path to the application. Runtime dependencies must also be declared in `pyproject.toml`, which takes precedence over `requirements.txt` during the Vercel build. `.vercelignore` excludes local environments, probes, test output and caches. The page has no manual collection action. PostgreSQL enforces SELECT-only access for the website reader role; the separate site-admin role can change only monitored-site configuration.
 
 The dashboard shows `未采集` instead of a confirmed zero until all three discovery sources or every eligible monitored site has a successful run for the selected Beijing day. A competitor date range is complete only if each eligible site has a successful run on every eligible Beijing day. For past days, site eligibility is conservatively based on whether the site already existed, not its current pause state; V1 does not record historical pause intervals, so a site paused at that time may leave an old day marked uncollected rather than incorrectly certifying zero. On the current day, a paused site remains eligible if it already attempted collection that day, so pausing cannot erase a confirmed result or hide a failed attempt. The site-list date range carries through to the URL detail view, and its status filter follows the displayed range status.
 
-## Preview deployment
+## Vercel deployment
 
 The Vercel Hobby project is `new-term-radar`. The stable preview alias for `codex/free-keyword-platform` is:
 
 `https://new-term-radar-git-codex-free-keyword-b14d3b-mingjobos-projects.vercel.app`
 
-The preview is protected twice: Vercel Preview Authentication first, then the application's Basic Auth. It uses only the pooled `radar_platform_reader` URL on the isolated `dev-free-platform` Neon branch. Production has not been switched, and no writer or migrator credential is present in the website deployment.
+The existing development preview may still have Vercel Preview Authentication until its access setting is changed. The application itself no longer requires a login. The development preview uses a pooled `radar_platform_reader` URL on the isolated `dev-free-platform` Neon branch; the production deployment must use the matching production reader URL. Neither deployment should contain a collector writer or migrator URL.
 
-To enable the V1 settings form on **Preview only**, add the development branch's pooled `radar_platform_site_admin` URL as `RADAR_SITE_ADMIN_DATABASE_URL` and the exact protected preview origin as `RADAR_WEB_ALLOWED_ORIGINS`. Keep `RADAR_READ_DATABASE_URL`, `RADAR_WEB_USERNAME` and `RADAR_WEB_PASSWORD_SHA256` in Preview as server-side secrets. Never set `RADAR_WRITE_DATABASE_URL` or `RADAR_MIGRATION_DATABASE_URL` in Vercel. After the new preview build, verify an authenticated GET for overview/competitors/settings, a same-origin site add/pause/resume, and a cross-origin write rejection. The settings form is intentionally read-only until the separate admin URL is configured.
+For settings writes, set the matching branch's pooled `radar_platform_site_admin` URL as `RADAR_SITE_ADMIN_DATABASE_URL` and the exact deployment origin as `RADAR_WEB_ALLOWED_ORIGINS`. Remove obsolete `RADAR_WEB_USERNAME` and `RADAR_WEB_PASSWORD_SHA256` values. Never set `RADAR_WRITE_DATABASE_URL` or `RADAR_MIGRATION_DATABASE_URL` in Vercel. On production, disable Vercel-level visitor authentication, then verify public GETs for overview/terms/competitors/settings, a same-origin site add/pause/resume using the real `aiphotoeditor.com` site only if it is absent, and a cross-origin write rejection. The settings form remains read-only until the separate admin URL is configured.
 
-Rollback order: first turn off `FREE_RADAR_ENABLED` (and leave old `RADAR_ENABLED` unset), then roll back the preview website deployment. Do not drop new radar tables or legacy Trends tables during a website rollback; keep their state for a later retry.
+Rollback order: first set `FREE_RADAR_ENABLED=false` (and leave old `RADAR_ENABLED` unset or `false`), then roll back the website to its previous verified deployment. Do not drop radar or legacy Trends tables during a website rollback; keep their state for investigation and a later retry.
 
 ## Migrations
 
