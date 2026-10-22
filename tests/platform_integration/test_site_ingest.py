@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 import psycopg
 from psycopg import sql
@@ -12,7 +13,9 @@ from radar.platform.site_admin import SiteAdmin
 from radar.platform.site_store import SiteStore
 
 
-NOW = datetime(2026, 10, 21, 1, 0, tzinfo=timezone.utc)
+NOW = datetime.now(ZoneInfo("Asia/Shanghai")).replace(
+    hour=9, minute=0, second=0, microsecond=0
+).astimezone(timezone.utc)
 
 
 def _xml(*paths: str) -> bytes:

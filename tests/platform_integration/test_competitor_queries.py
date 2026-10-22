@@ -17,8 +17,9 @@ FILTERS = {"from": "2026-10-21", "to": "2026-10-21"}
 def _site(connection, name: str, host: str, *, version: int | None = None, enabled: bool = True) -> uuid.UUID:
     site_id = uuid.uuid4()
     connection.execute(
-        "INSERT INTO radar_sites (id, name, homepage_url, host, enabled) VALUES (%s, %s, %s, %s, %s)",
-        (site_id, name, f"https://{host}/", host, enabled),
+        "INSERT INTO radar_sites (id, name, homepage_url, host, enabled, created_at) "
+        "VALUES (%s, %s, %s, %s, %s, %s)",
+        (site_id, name, f"https://{host}/", host, enabled, NOW),
     )
     if version is not None:
         connection.execute(

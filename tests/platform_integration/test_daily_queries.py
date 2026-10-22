@@ -66,8 +66,8 @@ def test_overview_day_boundary_and_missing_state(test_dsn: str, migrated_schema:
         _evidence(connection, new_id, "github:breakout", NEW)
         _evidence(connection, new_id, "hf:models", NEW + timedelta(seconds=1))
         connection.execute(
-            "INSERT INTO radar_sites (id, name, homepage_url, host) "
-            "VALUES (%s, 'Example', 'https://example.com/', 'example.com')", (site_id,)
+            "INSERT INTO radar_sites (id, name, homepage_url, host, created_at) "
+            "VALUES (%s, 'Example', 'https://example.com/', 'example.com', %s)", (site_id, NEW)
         )
         for event_type, url in (("added", "https://example.com/a"), ("removed", "https://example.com/b")):
             connection.execute(
