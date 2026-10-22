@@ -12,7 +12,7 @@ class DatabaseSafetyError(ValueError):
     pass
 
 
-PRODUCTION_ENDPOINT = "ep-silent-tooth-aq1rgb46"
+PRODUCTION_ENDPOINTS = frozenset({"ep-silent-tooth-aq1rgb46", "ep-fancy-paper-b527wslw"})
 _SCHEMA = re.compile(r"[A-Za-z_][A-Za-z0-9_]*\Z")
 
 
@@ -31,7 +31,7 @@ def _endpoint_name(host: str) -> str:
 def validate_test_database_url(dsn: str, allowed_host: str) -> str:
     host = database_host(dsn)
     allowed = allowed_host.casefold().rstrip(".")
-    if _endpoint_name(host) == PRODUCTION_ENDPOINT:
+    if _endpoint_name(host) in PRODUCTION_ENDPOINTS:
         raise DatabaseSafetyError("production database endpoint is forbidden for tests")
     if host != allowed and _endpoint_name(host) != _endpoint_name(allowed):
         raise DatabaseSafetyError(f"test database host {host!r} does not match RADAR_TEST_ALLOWED_HOST")

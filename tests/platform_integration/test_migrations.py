@@ -49,15 +49,29 @@ def test_historical_migration_bytes_are_immutable() -> None:
 
 
 @pytest.mark.parametrize(
-    "dsn",
+    ("dsn", "allowed_host"),
     [
-        "postgresql://u:p@ep-silent-tooth-aq1rgb46.c-8.us-east-1.aws.neon.tech/neondb",
-        "postgresql://u:p@ep-silent-tooth-aq1rgb46-pooler.c-8.us-east-1.aws.neon.tech/neondb",
+        (
+            "postgresql://u:p@ep-silent-tooth-aq1rgb46.c-8.us-east-1.aws.neon.tech/neondb",
+            "ep-silent-tooth-aq1rgb46.c-8.us-east-1.aws.neon.tech",
+        ),
+        (
+            "postgresql://u:p@ep-silent-tooth-aq1rgb46-pooler.c-8.us-east-1.aws.neon.tech/neondb",
+            "ep-silent-tooth-aq1rgb46.c-8.us-east-1.aws.neon.tech",
+        ),
+        (
+            "postgresql://u:p@ep-fancy-paper-b527wslw.c-7.us-east-2.aws.neon.tech/neondb",
+            "ep-fancy-paper-b527wslw.c-7.us-east-2.aws.neon.tech",
+        ),
+        (
+            "postgresql://u:p@ep-fancy-paper-b527wslw-pooler.c-7.us-east-2.aws.neon.tech/neondb",
+            "ep-fancy-paper-b527wslw.c-7.us-east-2.aws.neon.tech",
+        ),
     ],
 )
-def test_known_production_endpoint_is_always_rejected(dsn: str) -> None:
+def test_known_production_endpoint_is_always_rejected(dsn: str, allowed_host: str) -> None:
     with pytest.raises(DatabaseSafetyError, match="production"):
-        validate_test_database_url(dsn, "ep-silent-tooth-aq1rgb46.c-8.us-east-1.aws.neon.tech")
+        validate_test_database_url(dsn, allowed_host)
 
 
 def test_test_database_host_must_match_allowlist() -> None:
