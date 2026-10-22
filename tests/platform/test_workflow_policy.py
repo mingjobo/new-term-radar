@@ -48,8 +48,6 @@ def test_app_requires_read_and_site_admin_dsn_separately(monkeypatch) -> None:
         "RADAR_READ_DATABASE_URL": "reader-only",
         "RADAR_SITE_ADMIN_DATABASE_URL": "site-admin-only",
         "RADAR_WRITE_DATABASE_URL": "collector-only",
-        "RADAR_WEB_USERNAME": "tester",
-        "RADAR_WEB_PASSWORD_SHA256": "0" * 64,
         "RADAR_WEB_ALLOWED_ORIGINS": "https://preview.example.org",
     }
     app = web.create_app_from_env(env)
@@ -62,6 +60,4 @@ def test_collector_secret_never_used_by_web_factory() -> None:
         web.create_app_from_env({
             "RADAR_WRITE_DATABASE_URL": "collector-only",
             "DATABASE_URL": "legacy",
-            "RADAR_WEB_USERNAME": "tester",
-            "RADAR_WEB_PASSWORD_SHA256": "0" * 64,
         })

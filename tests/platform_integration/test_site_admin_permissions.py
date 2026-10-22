@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import base64
-import hashlib
 import io
 import json
 import os
@@ -27,11 +25,8 @@ def test_site_admin_role_can_manage_only_site_configuration(test_dsn: str, test_
     admin.update_site(site_id, name="Paused", sitemap_url=None, enabled=False)
     admin.update_site(site_id, name="Resumed", sitemap_url=None, enabled=True)
 
-    password = "test-password"
     app = create_app(
         ReadQueries(reader_dsn, schema=test_schema),
-        username="tester",
-        password_sha256=hashlib.sha256(password.encode()).hexdigest(),
         site_admin=admin,
         allowed_origins={"https://radar.example.test"},
     )
@@ -43,7 +38,6 @@ def test_site_admin_role_can_manage_only_site_configuration(test_dsn: str, test_
         "QUERY_STRING": "",
         "HTTP_HOST": "radar.example.test",
         "HTTP_ORIGIN": "https://radar.example.test",
-        "HTTP_AUTHORIZATION": "Basic " + base64.b64encode(f"tester:{password}".encode()).decode(),
         "CONTENT_TYPE": "application/json",
         "CONTENT_LENGTH": str(len(body)),
         "wsgi.input": io.BytesIO(body),

@@ -57,8 +57,6 @@ def test_all_three_entrypoints_after_merge() -> None:
     env = dict(os.environ)
     env.update(
         RADAR_READ_DATABASE_URL="postgresql://reader:secret@example.com/db",
-        RADAR_WEB_USERNAME="researcher",
-        RADAR_WEB_PASSWORD_SHA256="0" * 64,
     )
     vercel = subprocess.run(
         [sys.executable, "-c", "from api.index import app; assert callable(app)"],

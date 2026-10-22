@@ -12,7 +12,7 @@ from zoneinfo import ZoneInfo
 
 from psycopg.errors import UniqueViolation
 
-from .auth import BasicAuth, trusted_same_origin
+from .auth import trusted_same_origin
 from .queries import ReadQueries
 from .site_admin import SiteAdmin
 
@@ -114,12 +114,9 @@ def _selected_day(query_string: str, now: datetime) -> date:
 def create_app(
     queries: ReadQueries,
     *,
-    username: str,
-    password_sha256: str,
     site_admin: SiteAdmin | None = None,
     allowed_origins: set[str] | None = None,
 ) -> Callable:
-    auth = BasicAuth(username=username, password_sha256=password_sha256)
     trusted_origins = {origin.rstrip("/").casefold() for origin in (allowed_origins or set())}
     page = TEMPLATE.read_bytes()
     static_files = {
@@ -129,15 +126,6 @@ def create_app(
 
     def app(environ, start_response):
         head = environ.get("REQUEST_METHOD", "GET").upper() == "HEAD"
-        if not auth.authorized(environ.get("HTTP_AUTHORIZATION")):
-            return _response(
-                start_response,
-                "401 Unauthorized",
-                b"Authentication required",
-                "text/plain; charset=utf-8",
-                [("WWW-Authenticate", 'Basic realm="Term Signal", charset="UTF-8"')],
-                head=head,
-            )
         method = environ.get("REQUEST_METHOD", "GET").upper()
         path = environ.get("PATH_INFO") or "/"
         if method in {"POST", "PATCH"} and (path == "/api/settings/sites" or path.startswith("/api/settings/sites/")):
@@ -188,7 +176,7 @@ def create_app(
             return _response(
                 start_response,
                 "405 Method Not Allowed",
-                b"Read-only service",
+                b"Method not allowed",
                 "text/plain; charset=utf-8",
                 [("Allow", "GET, HEAD")],
             )
@@ -291,16 +279,12 @@ def create_app_from_env(environ: Mapping[str, str] | None = None) -> Callable:
     dsn = env.get("RADAR_READ_DATABASE_URL")
     if not dsn:
         raise RuntimeError("RADAR_READ_DATABASE_URL is required; writer and legacy URLs are never fallbacks")
-    username = env.get("RADAR_WEB_USERNAME")
-    password_hash = env.get("RADAR_WEB_PASSWORD_SHA256")
-    if not username or not password_hash:
-        raise RuntimeError("RADAR_WEB_USERNAME and RADAR_WEB_PASSWORD_SHA256 are required")
     admin_dsn = env.get("RADAR_SITE_ADMIN_DATABASE_URL")
     origins = {value.strip() for value in env.get("RADAR_WEB_ALLOWED_ORIGINS", "").split(",") if value.strip()}
     if admin_dsn and not origins:
         raise RuntimeError("RADAR_WEB_ALLOWED_ORIGINS is required when settings writes are enabled")
     return create_app(
-        ReadQueries(dsn), username=username, password_sha256=password_hash,
+        ReadQueries(dsn),
         site_admin=SiteAdmin(admin_dsn) if admin_dsn else None,
         allowed_origins=origins,
     )

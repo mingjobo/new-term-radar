@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import base64
-import hashlib
 import io
 import json
 import uuid
@@ -32,17 +30,16 @@ class FakeQueries:
 def _request(app, path):
     route, _, query = path.partition("?")
     captured = {}
-    auth = "Basic " + base64.b64encode(b"user:password").decode()
     body = b"".join(app({
         "REQUEST_METHOD": "GET", "PATH_INFO": route, "QUERY_STRING": query,
-        "HTTP_AUTHORIZATION": auth, "wsgi.input": io.BytesIO(b""),
+        "wsgi.input": io.BytesIO(b""),
     }, lambda status, headers: captured.update(status=status)))
     return captured["status"], json.loads(body)
 
 
 def test_competitor_and_settings_apis_are_paged_and_read_only() -> None:
     queries = FakeQueries()
-    app = create_app(queries, username="user", password_sha256=hashlib.sha256(b"password").hexdigest())
+    app = create_app(queries)
 
     status, payload = _request(app, "/api/competitors?q=Exam&changed=1&page=2&limit=10")
     assert status == "200 OK" and payload["total"] == 1
@@ -56,6 +53,6 @@ def test_competitor_and_settings_apis_are_paged_and_read_only() -> None:
 
 
 def test_invalid_competitor_paging_and_id_are_rejected() -> None:
-    app = create_app(FakeQueries(), username="user", password_sha256=hashlib.sha256(b"password").hexdigest())
+    app = create_app(FakeQueries())
     assert _request(app, "/api/competitors?page=0")[0] == "400 Bad Request"
     assert _request(app, "/api/competitors/not-a-uuid/events")[0] == "400 Bad Request"

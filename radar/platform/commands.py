@@ -36,7 +36,7 @@ def build_parser() -> argparse.ArgumentParser:
     migrate.add_argument("--database-env", default="RADAR_MIGRATION_DATABASE_URL")
     migrate.add_argument("--schema", default="public")
     migrate.add_argument("--migrations-dir", type=Path)
-    serve = commands.add_parser("serve", help="serve the read-only research dashboard")
+    serve = commands.add_parser("serve", help="serve the keyword research dashboard")
     serve.add_argument("--host", default="127.0.0.1")
     serve.add_argument("--port", type=int, default=8000)
     collect = commands.add_parser("collect", help="collect free sources into Neon")
@@ -60,7 +60,7 @@ def run_platform_command(command: str, argv: list[str]) -> int:
     if args.command == "serve":
         app = create_app_from_env()
         with make_server(args.host, args.port, app) as server:
-            print(f"Serving read-only dashboard on http://{args.host}:{args.port}")
+            print(f"Serving keyword research dashboard on http://{args.host}:{args.port}")
             server.serve_forever()
         return 0
     if args.command == "collect":

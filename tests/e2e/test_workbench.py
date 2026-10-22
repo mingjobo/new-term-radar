@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 import socket
 import threading
 import uuid
@@ -119,7 +118,7 @@ def server():
         port = probe.getsockname()[1]
     origin = f"http://127.0.0.1:{port}"
     app = create_app(
-        data, username="tester", password_sha256=hashlib.sha256(b"password").hexdigest(),
+        data,
         site_admin=data, allowed_origins={origin},
     )
     httpd = make_server("127.0.0.1", port, app, handler_class=QuietHandler)
@@ -142,7 +141,6 @@ def browser():
 def page(browser, server):
     context = browser.new_context(
         viewport={"width": 1440, "height": 900},
-        http_credentials={"username": "tester", "password": "password"},
     )
     page = context.new_page()
     page.goto(server[0], wait_until="networkidle")

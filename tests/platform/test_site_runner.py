@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 from radar.platform.models import HttpResponse, Lease
 
 
-NOW = datetime(2026, 10, 21, 1, 0, tzinfo=timezone.utc)
+BEIJING = ZoneInfo("Asia/Shanghai")
+NOW = datetime.now(BEIJING).replace(hour=9, minute=0, second=0, microsecond=0).astimezone(timezone.utc)
 
 
 class MemoryRepo:
@@ -104,7 +106,7 @@ def test_missed_previous_day_job_is_skipped_without_fetching_history() -> None:
     sites = MemorySites()
     sites.rows = [sites.rows[1]]
     old_day = NOW - timedelta(days=1)
-    old_key = f"site:{sites.rows[0]['id']}:2026-10-20"
+    old_key = f"site:{sites.rows[0]['id']}:{old_day.astimezone(BEIJING).date().isoformat()}"
     repo.enqueue(
         old_key, "collect-site", old_day,
         {"site_id": str(sites.rows[0]["id"]), "source_instance": f"site:{sites.rows[0]['id']}"},
