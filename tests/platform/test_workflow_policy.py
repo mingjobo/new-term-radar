@@ -20,9 +20,14 @@ def test_only_free_collect_is_scheduled() -> None:
     assert "workflow_dispatch:" in workflow
     assert "free-radar-dev" in workflow
     assert "free-radar-production" in workflow
-    assert "github.event_name == 'schedule' && 'free-radar-production' || 'free-radar-dev'" in workflow
+    assert "group: free-radar-${{ github.ref == 'refs/heads/main' && 'production' || 'dev' }}" in workflow
+    assert "github.ref == 'refs/heads/main' && 'free-radar-production' || 'free-radar-dev'" in workflow
     assert "RADAR_WRITE_DATABASE_URL: ${{ secrets.RADAR_WRITE_DATABASE_URL }}" in workflow
     assert "GITHUB_TOKEN: ${{ github.token }}" in workflow
+    assert "(github.event_name == 'workflow_dispatch' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/codex/free-keyword-platform'))" in workflow
+    assert "github.event_name == 'schedule' && github.ref == 'refs/heads/main' && vars.FREE_RADAR_ENABLED == 'true'" in workflow
+    assert "if [ \"$KIND\" = sites ]; then MAX_JOBS=20; else MAX_JOBS=3; fi" in workflow
+    assert "timeout-minutes: 25" in workflow
     for forbidden in ("AISA_API_KEY", "GOANYAPI_API_KEY", "DATAFORSEO", "OPENAI_API_KEY",
                       "RADAR_READ_DATABASE_URL", "RADAR_SITE_ADMIN_DATABASE_URL", "RADAR_MIGRATION_DATABASE_URL",
                       "python -m radar daily"):
@@ -36,6 +41,7 @@ def test_paid_workflow_remains_disabled() -> None:
     assert "RADAR_ENABLED" not in new.replace("FREE_RADAR_ENABLED", "")
     assert "github.event_name == 'workflow_dispatch'" in new
     assert "refs/heads/codex/free-keyword-platform" in new
+    assert "refs/heads/main" in new
 
 
 def test_app_requires_read_and_site_admin_dsn_separately(monkeypatch) -> None:

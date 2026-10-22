@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       kind:
-        description: "Collect new terms or competitor Sitemaps on the development database"
+        description: "Collect new terms or competitor Sitemaps in the selected branch environment"
         required: true
         type: choice
         options:
@@ -18,18 +18,18 @@ permissions:
   contents: read
 
 concurrency:
-  group: free-radar-${{ github.event_name == 'schedule' && 'production' || 'dev' }}
+  group: free-radar-${{ github.ref == 'refs/heads/main' && 'production' || 'dev' }}
   cancel-in-progress: false
 
 jobs:
   collect:
-    # Cron is off by default and only runs from main. Manual runs are limited to our
-    # trusted development branch. Each mode has a different environment secret.
+    # Cron is off by default and only runs from main. Manual runs are limited to
+    # main and the trusted development branch; each uses its own environment secret.
     if: >-
       (github.event_name == 'schedule' && github.ref == 'refs/heads/main' && vars.FREE_RADAR_ENABLED == 'true') ||
-      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/codex/free-keyword-platform')
+      (github.event_name == 'workflow_dispatch' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/codex/free-keyword-platform'))
     runs-on: ubuntu-latest
-    environment: ${{ github.event_name == 'schedule' && 'free-radar-production' || 'free-radar-dev' }}
+    environment: ${{ github.ref == 'refs/heads/main' && 'free-radar-production' || 'free-radar-dev' }}
     timeout-minutes: 25
     env:
       KIND: ${{ github.event_name == 'workflow_dispatch' && inputs.kind || github.event.schedule == '30 1 * * *' && 'sites' || 'sources' }}
