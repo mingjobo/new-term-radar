@@ -26,12 +26,21 @@ class MemoryRepo:
     def claim_due(self, now, *, limit=1, lease_seconds=300, task=None):
         self.claim_limits.append(limit)
         keys = [
-            key for key, value in sorted(self.jobs.items())
+            key for key, value in sorted(self.jobs.items(), key=lambda item: (item[1]["due"], item[0]))
             if value["status"] == "pending" and value["due"] <= now and value["task"] == task
         ][:limit]
         for key in keys:
             self.jobs[key]["status"] = "leased"
         return [Lease(key, "token", self.jobs[key]["task"], self.jobs[key]["payload"], self.jobs[key]["due"]) for key in keys]
+
+    def expire_site_jobs_before(self, cutoff, now):
+        expired = 0
+        for job in self.jobs.values():
+            if job["task"] == "collect-site" and job["status"] == "pending" and job["due"] < cutoff:
+                job["status"] = "complete"
+                self.finished.append({"status": "skipped", "reason": "missed daily slot"})
+                expired += 1
+        return expired
 
     def finish_job(self, lease, result, now):
         self.jobs[lease.job_key]["status"] = "complete"
@@ -114,6 +123,26 @@ def test_missed_previous_day_job_is_skipped_without_fetching_history() -> None:
 
     result = run_due_sites(repo, sites, NOW, lambda host: Http(host), max_jobs=10)
 
-    assert result.jobs == 2
+    assert result.jobs == 1
     assert sites.commits == [sites.rows[0]["id"]]
     assert [item["status"] for item in repo.finished] == ["skipped", "ok"]
+
+
+def test_old_backlog_does_not_consume_next_day_site_budget() -> None:
+    from radar.platform.schedule import run_due_sites
+
+    repo = MemoryRepo()
+    sites = MemorySites()
+    sites.rows = [
+        {"id": uuid.uuid4(), "name": f"Site {number}", "host": "good.example",
+         "homepage_url": "https://good.example/", "sitemap_url": None}
+        for number in range(21)
+    ]
+
+    first = run_due_sites(repo, sites, NOW, lambda host: Http(host), max_jobs=20)
+    second = run_due_sites(repo, sites, NOW + timedelta(days=1), lambda host: Http(host), max_jobs=20)
+
+    assert first.jobs == second.jobs == 20
+    assert len(sites.commits) == 40
+    assert sum(job["status"] == "pending" for job in repo.jobs.values()) == 1
+    assert sum(item["status"] == "skipped" for item in repo.finished) == 1

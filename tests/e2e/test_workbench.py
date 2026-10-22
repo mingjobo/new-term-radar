@@ -244,6 +244,10 @@ def test_empty_failed_and_no_match_states(page, server) -> None:
         data.daily_mode = "ok"
         page.reload(wait_until="networkidle")
         page.get_by_text("今天暂无新词").wait_for()
+        data.daily_mode = "partial"
+        page.reload(wait_until="networkidle")
+        page.get_by_text("今日来源部分采集失败").wait_for()
+        assert page.get_by_text("今天暂无新词").count() == 0
 
         data.events_empty = True
         page.goto(f"{server[0]}/#keywords/competitors", wait_until="networkidle")

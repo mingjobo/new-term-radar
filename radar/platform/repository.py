@@ -89,6 +89,24 @@ class Repository:
             for row in rows
         ]
 
+    def expire_site_jobs_before(self, cutoff: datetime, now: datetime) -> int:
+        """Retire missed daily site jobs without using today's crawl allowance."""
+        _aware(cutoff, "cutoff")
+        _aware(now, "now")
+        result = {"status": "skipped", "reason": "missed daily slot"}
+        with connect(self.dsn, schema=self.schema) as connection:
+            cursor = connection.execute(
+                """
+                UPDATE radar_jobs
+                SET status = 'complete', result = %s, error = NULL,
+                    lease_token = NULL, lease_expires_at = NULL, updated_at = %s
+                WHERE task = 'collect-site' AND scheduled_for < %s
+                  AND (status = 'pending' OR (status = 'leased' AND lease_expires_at <= %s))
+                """,
+                (Jsonb(result), now, cutoff, now),
+            )
+            return cursor.rowcount
+
     @staticmethod
     def _assert_lease(row: dict[str, Any] | None, lease: Lease, now: datetime) -> None:
         if row is None or row["status"] != "leased" or str(row["lease_token"]) != lease.lease_token:

@@ -154,9 +154,10 @@ async function newTerms(token) {
     const list = node("section", "term-list");
     if (!data.items.length) {
       const message = summary.status === "failed" ? "今日来源采集失败" :
+        summary.status === "partial" ? "今日来源部分采集失败" :
         summary.status === "not_collected" ? "今天尚未采集" : "今天暂无新词";
-      const box = empty(message, summary.status === "failed" ? "请到设置查看采集原因。" : null);
-      if (summary.status === "failed") {
+      const box = empty(message, ["failed", "partial"].includes(summary.status) ? "今日数据不完整，请到设置查看采集原因。" : null);
+      if (["failed", "partial"].includes(summary.status)) {
         const link = node("a", "text-link", "查看设置 →"); link.href = "/#settings"; box.append(link);
       }
       list.append(box);

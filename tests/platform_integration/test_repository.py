@@ -22,6 +22,28 @@ def test_claim_due_filters_source_jobs_from_site_jobs(repository: Repository) ->
     assert [lease.job_key for lease in leases] == ["source:github:slot"]
 
 
+def test_expire_old_site_jobs_preserves_current_jobs_and_source_jobs(
+    repository: Repository, test_dsn: str, migrated_schema: str
+) -> None:
+    old = datetime(2026, 10, 15, 2, 0, tzinfo=timezone.utc)
+    today = old + timedelta(days=1)
+    assert repository.enqueue("site:old", "collect-site", old, {"site_id": "old"})
+    assert repository.enqueue("site:today", "collect-site", today, {"site_id": "today"})
+    assert repository.enqueue("source:old", "collect-source", old, {"source_instance": "hf:models"})
+
+    assert repository.expire_site_jobs_before(today, today) == 1
+
+    with psycopg.connect(test_dsn) as connection:
+        connection.execute(sql.SQL("SET search_path TO {}").format(sql.Identifier(migrated_schema)))
+        rows = connection.execute(
+            "SELECT job_key, status, result FROM radar_jobs ORDER BY job_key"
+        ).fetchall()
+    states = {key: (status, result) for key, status, result in rows}
+    assert states["site:old"] == ("complete", {"status": "skipped", "reason": "missed daily slot"})
+    assert states["site:today"][0] == "pending"
+    assert states["source:old"][0] == "pending"
+
+
 NOW = datetime(2026, 10, 15, 2, 0, tzinfo=timezone.utc)
 
 

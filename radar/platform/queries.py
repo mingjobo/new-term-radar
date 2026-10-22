@@ -127,11 +127,15 @@ class ReadQueries:
                     (SELECT count(*) FROM radar_site_events
                      WHERE event_type = 'removed' AND discovered_at >= %(day_start)s
                        AND discovered_at < %(day_end)s) AS removed_urls,
-                    (SELECT count(DISTINCT source_instance) = cardinality(%(source_instances)s::text[])
-                     FROM radar_runs
-                     WHERE source_instance = ANY(%(source_instances)s::text[])
-                       AND status IN ('ok', 'baseline')
-                       AND finished_at >= %(day_start)s AND finished_at < %(day_end)s) AS sources_collected,
+                    (SELECT count(*) = cardinality(%(source_instances)s::text[])
+                            AND coalesce(bool_and(status IN ('ok', 'baseline')), false)
+                     FROM (
+                         SELECT DISTINCT ON (source_instance) source_instance, status
+                         FROM radar_runs
+                         WHERE source_instance = ANY(%(source_instances)s::text[])
+                           AND finished_at >= %(day_start)s AND finished_at < %(day_end)s
+                         ORDER BY source_instance, finished_at DESC, id DESC
+                     ) AS latest_sources) AS sources_collected,
                     (EXISTS(SELECT 1 FROM radar_sites AS sites
                             WHERE sites.created_at < %(day_end)s
                               AND (sites.enabled OR %(historical)s OR EXISTS (
@@ -274,8 +278,8 @@ class ReadQueries:
             status = "partial"
         return _jsonable({
             "date": day.isoformat(), "status": status,
-            "new_terms": counts["new_terms"] if successes else None,
-            "evidence": counts["evidence"] if successes else None,
+            "new_terms": counts["new_terms"] if successes == len(SOURCE_INSTANCES) else None,
+            "evidence": counts["evidence"] if successes == len(SOURCE_INSTANCES) else None,
             "last_success_at": latest_success,
             "sources": statuses,
         })

@@ -129,6 +129,28 @@ def test_overview_requires_every_enabled_site_and_source_to_have_collected(
     assert [complete[key] for key in ("new_terms", "evidence", "changed_sites", "added_urls", "removed_urls")] == [0] * 5
 
 
+def test_later_source_failure_makes_daily_zero_unconfirmed(
+    test_dsn: str, migrated_schema: str, reader_dsn: str
+) -> None:
+    with psycopg.connect(test_dsn) as connection:
+        connection.execute(sql.SQL("SET search_path TO {}").format(sql.Identifier(migrated_schema)))
+        for source in ("github:breakout", "hf:models", "hf:spaces"):
+            _run(connection, source, NEW)
+
+    queries = ReadQueries(reader_dsn, schema=migrated_schema)
+    assert queries.overview(date(2026, 10, 21), NOW)["new_terms"] == 0
+
+    with psycopg.connect(test_dsn) as connection:
+        connection.execute(sql.SQL("SET search_path TO {}").format(sql.Identifier(migrated_schema)))
+        _run(connection, "hf:models", NEW + timedelta(hours=8), "failed")
+
+    overview = queries.overview(date(2026, 10, 21), NOW)
+    summary = queries.daily_source_status(date(2026, 10, 21), NOW)
+    assert overview["new_terms"] is None and overview["evidence"] is None
+    assert summary["status"] == "partial"
+    assert summary["new_terms"] is None and summary["evidence"] is None
+
+
 def test_historical_overview_does_not_change_when_site_is_paused_later(
     test_dsn: str, migrated_schema: str, reader_dsn: str
 ) -> None:

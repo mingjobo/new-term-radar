@@ -108,17 +108,20 @@ def run_due_sites(
 
     seed_site_jobs(repo, sites, now)
     active = {str(site["id"]): site for site in sites.list_enabled_sites()}
+    start_at = max(now, datetime.now(timezone.utc))
+    current_day = start_at.astimezone(BEIJING).date()
+    day_start = datetime.combine(current_day, time.min, BEIJING).astimezone(timezone.utc)
+    repo.expire_site_jobs_before(day_start, start_at)
     jobs = 0
     errors: list[dict] = []
     requests = 0
-    for _ in range(max_jobs):
+    while jobs < max_jobs:
         # Claim immediately before work so later sites never wait out their lease.
         claim_now = max(now, datetime.now(timezone.utc))
         claimed = repo.claim_due(claim_now, limit=1, lease_seconds=300, task="collect-site")
         if not claimed:
             break
         lease = claimed[0]
-        jobs += 1
         site_id = str(lease.payload.get("site_id", ""))
         current_day = max(now, datetime.now(timezone.utc)).astimezone(BEIJING).date()
         job_day = lease.scheduled_for.astimezone(BEIJING).date()
@@ -137,6 +140,7 @@ def run_due_sites(
                 max(now, datetime.now(timezone.utc)),
             )
             continue
+        jobs += 1
         http = None
         try:
             http = http_factory(site["host"])
