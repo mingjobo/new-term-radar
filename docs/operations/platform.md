@@ -2,20 +2,21 @@
 
 ## Environments
 
-The first development database is an isolated Neon branch in the existing `keyword-detective` project. No connection string is stored in Git.
+The active database is in the new Neon Free project `new-term-radar`. The previous `keyword-detective` project is not used or copied; its data remains untouched. No connection string is stored in Git.
 
 | Item | Value |
 |---|---|
-| Project | `keyword-detective` / `wandering-bonus-68047611` |
-| Parent | production / `br-delicate-breeze-aqgmgrxx` |
-| Development branch | `dev-free-platform` / `br-icy-hill-aqlxwahb` |
-| Development host | `ep-gentle-water-aqsds45y-pooler.c-8.us-east-1.aws.neon.tech` |
+| Project | `new-term-radar` / `curly-breeze-91368134` (AWS US East 2, Free plan) |
+| Production branch | `production` / `br-jolly-brook-b53hsuhn` |
+| Production host | `ep-fancy-paper-b527wslw.c-7.us-east-2.aws.neon.tech` |
+| Temporary test branch | `dev-validation` / `br-polished-forest-b5k2xxcy`; expires 2026-10-23 12:58 Beijing time |
+| Test host | `ep-dawn-block-b52e3qeb.c-7.us-east-2.aws.neon.tech` |
 | Database | `neondb` |
 | Roles | SQL-created least-privilege `radar_platform_reader`, `radar_platform_writer`, `radar_platform_migrator`, `radar_platform_site_admin` |
 
-The branch was created on 2026-10-15. The account does not permit a custom suspend interval, so the branch uses the account default rather than silently changing plan or buying compute.
+The temporary branch was created from the new, empty production branch on 2026-10-22. Integration tests run only on a non-production branch. Recreate an isolated branch when this one expires; never point `RADAR_TEST_*` at production.
 
-Do not create application roles with the Neon control-plane `create role` action: on this project it bootstraps them as members of `neon_superuser`. Create the four login roles with SQL using `NOINHERIT NOCREATEDB NOCREATEROLE NOSUPERUSER NOREPLICATION NOBYPASSRLS`, set a temporary password, then immediately rotate that password through Neon. Migrations `002_roles.sql` and `005_site_roles.sql` abort if their respective application roles inherit `neon_superuser`.
+Do not create application roles with the Neon control-plane `create role` action: it may bootstrap them as members of `neon_superuser`. Create the four login roles with SQL using `NOINHERIT NOCREATEDB NOCREATEROLE NOSUPERUSER NOREPLICATION NOBYPASSRLS` and unique random passwords. Migrations `002_roles.sql` and `005_site_roles.sql` abort if their respective application roles inherit `neon_superuser`.
 
 ## Required secrets
 
@@ -74,7 +75,7 @@ The Vercel Hobby project is `new-term-radar`. The stable preview alias for `code
 
 `https://new-term-radar-git-codex-free-keyword-b14d3b-mingjobos-projects.vercel.app`
 
-The existing development preview may still have Vercel Preview Authentication until its access setting is changed. The application itself no longer requires a login. The development preview uses a pooled `radar_platform_reader` URL on the isolated `dev-free-platform` Neon branch; the production deployment must use the matching production reader URL. Neither deployment should contain a collector writer or migrator URL.
+The existing development preview may still have Vercel Preview Authentication until its access setting is changed. The application itself no longer requires a login. The preview may still point to the old Neon project; repoint it before relying on its data. The production deployment must use the new project's production reader URL. Neither deployment should contain a collector writer or migrator URL.
 
 For settings writes, set the matching branch's pooled `radar_platform_site_admin` URL as `RADAR_SITE_ADMIN_DATABASE_URL` and the exact deployment origin as `RADAR_WEB_ALLOWED_ORIGINS`. Remove obsolete `RADAR_WEB_USERNAME` and `RADAR_WEB_PASSWORD_SHA256` values. Never set `RADAR_WRITE_DATABASE_URL` or `RADAR_MIGRATION_DATABASE_URL` in Vercel. On production, disable Vercel-level visitor authentication, then verify public GETs for overview/terms/competitors/settings, a same-origin site add/pause/resume using the real `aiphotoeditor.com` site only if it is absent, and a cross-origin write rejection. The settings form remains read-only until the separate admin URL is configured.
 
@@ -92,12 +93,8 @@ uv run --no-project --with 'psycopg[binary]' \
 
 Migration filenames and SHA-256 checksums are recorded in `radar_schema_migrations`. A changed checksum is an error. The initial migration creates only the original nine `radar_*` tables and their indexes. Migration `004_sitemap.sql` adds monitored sites, URL state and URL change events. The roles migrations grant the reader SELECT only, the collector writer platform-table access, and the site-admin role access only to monitored-site configuration. Migration `003_role_defaults.sql` removes broad default privileges, so unrelated legacy or future tables are not exposed automatically.
 
-Every integration test creates a unique `radar_test_<uuid>` schema and drops only that schema during cleanup. It refuses the known production endpoint, including its pooler hostname.
+Every integration test creates a unique `radar_test_<uuid>` schema and drops only that schema during cleanup. It refuses both known production endpoints, including their pooler hostnames.
 
-## Legacy Trends guard
+## Old account data
 
-Before the development migration, the inherited branch had these row counts: `rising_queries=5294`, `root_snapshots=242`, `refresh_runs=7`, `snapshot_comparisons=4`, `snapshot_keyword_diffs=242`, `snapshot_keyword_diff_items=5584`. Its ordered legacy column-shape hash was `2b20fffcad8cf095611aa5f06c9d7cb8`. The post-migration verification must match both the counts and hash.
-
-On 2026-10-15 the development branch applied `001_initial.sql`, `002_roles.sql`, and `003_role_defaults.sql`; an immediate second migration run applied nothing. It had nine `radar_*` tables, three 64-character recorded checksums, no leftover `radar_test_*` schema, and the legacy counts and shape hash above were unchanged. The integration gate passed 15 tests against unique remote schemas, including rollback, slot idempotency, lease expiry, terminal/retry behavior, and database-enforced reader/writer permissions.
-
-On 2026-10-21 the development branch also applied `004_sitemap.sql` and `005_site_roles.sql`. A second run again applied nothing, and all six legacy row counts stayed unchanged. The original `001_initial.sql` and `002_roles.sql` must retain their historically applied trailing blank line: a prior formatting commit removed it and caused a checksum mismatch, even though the SQL meaning was the same. Never alter an applied migration or overwrite its recorded checksum; add a new migration instead.
+The old `keyword-detective` Neon project is historical only. Its Trends tables and radar snapshots are not copied into the new project, and this release does not delete them. The new dashboard begins with empty baselines until the first successful collection. Existing migration files must retain their bytes and checksums; add a new migration for future schema changes rather than rewriting an applied one.
