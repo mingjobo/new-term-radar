@@ -3,9 +3,14 @@ name: Tests
 on:
   push:
   pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   test:
+    if: github.event_name != 'workflow_dispatch'
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -22,3 +27,30 @@ jobs:
         run: python -m pytest -q tests --ignore=tests/e2e
       - if: matrix.python == '3.12'
         run: python -m pytest -q tests
+
+  dev-integration:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/codex/free-keyword-platform'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    environment: free-radar-dev
+    env:
+      RADAR_TEST_DATABASE_URL: ${{ secrets.RADAR_TEST_DATABASE_URL }}
+      RADAR_TEST_ALLOWED_HOST: ${{ vars.RADAR_TEST_ALLOWED_HOST }}
+      RADAR_TEST_READER_DATABASE_URL: ${{ secrets.RADAR_TEST_READER_DATABASE_URL }}
+      RADAR_TEST_WRITER_DATABASE_URL: ${{ secrets.RADAR_TEST_WRITER_DATABASE_URL }}
+      RADAR_TEST_SITE_ADMIN_DATABASE_URL: ${{ secrets.RADAR_TEST_SITE_ADMIN_DATABASE_URL }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -e . pytest
+      - name: Verify isolated test connection is configured
+        run: |
+          : "${RADAR_TEST_DATABASE_URL:?missing test DSN}"
+          : "${RADAR_TEST_ALLOWED_HOST:?missing test host}"
+          : "${RADAR_TEST_READER_DATABASE_URL:?missing reader DSN}"
+          : "${RADAR_TEST_WRITER_DATABASE_URL:?missing writer DSN}"
+          : "${RADAR_TEST_SITE_ADMIN_DATABASE_URL:?missing site-admin DSN}"
+          python -c 'import os; from radar.platform.db import validate_test_database_url; [validate_test_database_url(os.environ[key], os.environ["RADAR_TEST_ALLOWED_HOST"]) for key in ("RADAR_TEST_DATABASE_URL", "RADAR_TEST_READER_DATABASE_URL", "RADAR_TEST_WRITER_DATABASE_URL", "RADAR_TEST_SITE_ADMIN_DATABASE_URL")]'
+      - run: python -m pytest -q tests/platform_integration

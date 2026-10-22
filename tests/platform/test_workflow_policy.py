@@ -9,6 +9,30 @@ from radar.platform import web
 
 ROOT = Path(__file__).resolve().parents[2]
 FREE_WORKFLOW = ROOT / ".github/workflows/free-platform.yml"
+DEV_INTEGRATION_WORKFLOW = ROOT / ".github/workflows/test.yml"
+
+
+def test_dev_integration_is_manual_and_confined_to_test_branch() -> None:
+    workflow = DEV_INTEGRATION_WORKFLOW.read_text(encoding="utf-8")
+    assert "workflow_dispatch:" in workflow
+    assert "refs/heads/codex/free-keyword-platform" in workflow
+    assert "environment: free-radar-dev" in workflow
+    assert "python -m pytest -q tests/platform_integration" in workflow
+    for name in (
+        "RADAR_TEST_DATABASE_URL",
+        "RADAR_TEST_ALLOWED_HOST",
+        "RADAR_TEST_READER_DATABASE_URL",
+        "RADAR_TEST_WRITER_DATABASE_URL",
+        "RADAR_TEST_SITE_ADMIN_DATABASE_URL",
+    ):
+        assert name in workflow
+    for forbidden in (
+        "free-radar-production",
+        "RADAR_READ_DATABASE_URL",
+        "RADAR_WRITE_DATABASE_URL",
+        "RADAR_MIGRATION_DATABASE_URL",
+    ):
+        assert forbidden not in workflow
 
 
 def test_only_free_collect_is_scheduled() -> None:
