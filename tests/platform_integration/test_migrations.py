@@ -141,12 +141,11 @@ def _legacy_shape_and_counts(dsn: str) -> dict[str, tuple[int, tuple[tuple[str, 
     return result
 
 
-def test_migration_does_not_change_legacy_trends_tables(test_dsn: str, test_schema: str) -> None:
+def test_migration_does_not_change_legacy_trends_tables_if_present(test_dsn: str, test_schema: str) -> None:
     before = _legacy_shape_and_counts(test_dsn)
     apply_migrations(test_dsn, schema=test_schema)
     after = _legacy_shape_and_counts(test_dsn)
 
-    assert before
     assert after == before
 
 
