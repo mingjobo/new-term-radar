@@ -11,7 +11,8 @@ FIRST linked: DataForSEO's one-per-domain backlinks, oldest first, 1,000 a call 
 (1,704). Stripe had about 143,000 such sites, Gumroad 140,000, Lemon Squeezy 18,000, Polar and
 Creem about 2,000 each: about $18 for all five. Sites that took their link down are not in it, and
 before mid-2021 the link graph saw few Stripe links. A pull stops at --max-usd and picks up where
-it stopped on the next run.
+it stopped on the next run. It starts a page only when the remaining budget covers the observed
+$0.06 page price; the provider reports actual cost afterward, so this is an estimated cap.
 
 `read` fetches each seller's home page title and description (free, `--workers` at a time;
 about 10 sites a second), `sort` has a small model sort the ones that answered by kind (an
@@ -33,6 +34,7 @@ from pathlib import Path
 from . import aisa, sellers
 
 PAGE = 1000
+PAGE_ESTIMATED_MICROS = 60_000  # one DataForSEO page cost about $0.06 in October 2026
 KIND_BATCH = 60
 KIND_MICROS = 5000          # an estimate: the chat endpoint does not report its price
 READ_CHUNK = 500
@@ -85,7 +87,7 @@ def pull_one(db: sqlite3.Connection, platform: str, budget: int) -> dict:
     """Pages of one platform until it is done or `budget` micro-USD are spent; saved after every page."""
     token, rows, cost, done = progress(db, platform)
     spent, error = 0, ""
-    while not done and spent < budget:
+    while not done and budget - spent >= PAGE_ESTIMATED_MICROS:
         items, nxt, c, error = page(platform, token)
         spent, cost = spent + c, cost + c
         if not error:

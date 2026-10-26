@@ -158,11 +158,11 @@ def cmd_history(args, cfg: dict, state: Path) -> int:
     step = (args.names or ["report"])[0]
     db = seller_history.connect(state)
     if step == "pull":
-        result = seller_history.pull(db, args.platform or cfg["sellers"]["platforms"], int((args.max_usd or 20) * 1e6))
+        result = seller_history.pull(db, args.platform or cfg["sellers"]["platforms"], int((20 if args.max_usd is None else args.max_usd) * 1e6))
     elif step == "read":
         result = seller_history.read(db, args.workers)
     elif step == "sort":
-        result = seller_history.sort(db, cfg["sellers"]["model"], int((args.max_usd or 30) * 1e6))
+        result = seller_history.sort(db, cfg["sellers"]["model"], int((30 if args.max_usd is None else args.max_usd) * 1e6))
     elif step == "report":
         result = seller_history.summary(db, Path(args.out) if args.out else None)
     else:

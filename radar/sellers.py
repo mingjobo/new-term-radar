@@ -38,7 +38,6 @@ from __future__ import annotations
 import html
 import json
 import re
-import urllib.request
 import zlib
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date
@@ -46,6 +45,7 @@ from pathlib import Path
 
 from . import UA, aisa, goanyapi, snap
 from .i18n import t
+from .platform.http import HttpClient
 
 TOOL = "post_dataforseo_backlinks_backlinks_live"
 DOMAINS = "post_dataforseo_backlinks_referring_domains_live"
@@ -142,15 +142,19 @@ def first_day(host: str, sites: dict[str, str]) -> str:
 
 
 def page_words(host: str, limit: int = PAGE_BYTES) -> tuple[str, str]:
-    """(title, description) of the seller's home page, reading at most `limit` bytes off the wire
-    (gzip when the site offers it); empty when it does not answer."""
+    """(title, description) of a seller's home page, reading at most `limit` wire bytes.
+    Gzip output is capped at PAGE_BYTES; an unsafe or silent site returns empty strings."""
     try:
-        req = urllib.request.Request(f"https://{host}/", headers={"User-Agent": UA, "Accept-Encoding": "gzip"})
-        with urllib.request.urlopen(req, timeout=15) as res:
-            raw = res.read(limit)
-            if res.headers.get("Content-Encoding", "").lower() == "gzip":
-                raw = zlib.decompressobj(16 + zlib.MAX_WBITS).decompress(raw, PAGE_BYTES)   # a cut stream decodes as far as it goes
-            text = raw.decode("utf-8", "replace")
+        bare = host.removeprefix("www.")
+        client = HttpClient(allowed_hosts={bare, f"www.{bare}"}, timeout=15, max_redirects=3,
+                            max_response_bytes=limit, truncate_response=True)
+        res = client.request("GET", f"https://{host}/", headers={"User-Agent": UA, "Accept-Encoding": "gzip"})
+        if not 200 <= res.status < 300:
+            return "", ""
+        raw = res.body[:limit]
+        if res.headers.get("content-encoding", "").lower() == "gzip":
+            raw = zlib.decompressobj(16 + zlib.MAX_WBITS).decompress(raw, PAGE_BYTES)   # a cut stream decodes as far as it goes
+        text = raw.decode("utf-8", "replace")
     except Exception:  # noqa: BLE001 — a site that does not answer keeps its domain only
         return "", ""
     title = TITLE.search(text)

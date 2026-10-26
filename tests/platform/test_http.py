@@ -209,6 +209,39 @@ def test_default_transport_connects_to_pinned_ip_with_original_tls_host(monkeypa
     assert destinations == [("93.184.216.34", 443)]
 
 
+def test_default_transport_can_read_only_a_sellers_page_head(monkeypatch: pytest.MonkeyPatch) -> None:
+    reads: list[int] = []
+
+    class FakeResponse:
+        status = 200
+
+        def read(self, limit: int) -> bytes:
+            reads.append(limit)
+            return b"<title>Example</title>"[:limit]
+
+        def getheaders(self) -> list[tuple[str, str]]:
+            return []
+
+    class FakeHTTPSConnection:
+        def __init__(self, *_args: object, **_kwargs: object) -> None:
+            pass
+
+        def request(self, *_args: object, **_kwargs: object) -> None:
+            pass
+
+        def getresponse(self) -> FakeResponse:
+            return FakeResponse()
+
+        def close(self) -> None:
+            pass
+
+    monkeypatch.setattr(http_module.http.client, "HTTPSConnection", FakeHTTPSConnection)
+    client = HttpClient(allowed_hosts={"example.com"}, resolver=lambda _host: ["93.184.216.34"],
+                        max_response_bytes=8, truncate_response=True)
+    assert client.request("GET", "https://example.com/").body == b"<title>E"
+    assert reads == [9]
+
+
 def test_redirect_does_not_forward_authorization_to_another_host() -> None:
     seen: list[dict[str, str]] = []
 

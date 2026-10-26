@@ -69,7 +69,7 @@
 | 新词表 | 针对当天的新名字:找出它背后的通用搜索词(大家拿这个新东西做什么),逐个估算规模、看首页还有没有位置,并给出决策 | AIsa key；[GoAnyAPI](https://goanyapi.com) key 可选 | 5 个名字约每天 $0.18，加上 GoAnyAPI 约 $0.30 |
 | 名字判断 | 小模型给每个词打分：是某个具体东西的名字，还是普通词？ | AIsa key | 每次不到一美分 |
 
-价格是 2026 年 10 月 AIsa 的实际收费。按示例配置（35 个 X 账号、每天读三次，新词表每天读 5 个名字），一个月约 $15：读 X 约 $10，新词表约 $5。少读几个账号或者每天只读一次，费用按比例下降。
+价格是 2026 年 10 月 AIsa 的实际收费。按示例配置（35 个 X 账号、每天读三次，新词表每天读 5 个名字，每周运行新卖家信号），一个月约 $17：读 X 约 $10，新词表约 $5，新卖家约 $1.60。其他付费信号会增加总费用。少读几个账号或者每天只读一次，X 的费用会按比例下降。
 
 ## 新词表
 
@@ -159,7 +159,7 @@ python -m radar history sort            # 小模型按类型分：每 60 个站�
 python -m radar history --out sellers.csv
 ```
 
-`history pull` 读今天链着每个平台的所有站，每个站一行，带它第一次挂链接的日期：用 DataForSEO 每个域名取一条的外链，从最早的排起，每次 1,000 条（$0.06）。2026-10-14 核对过：两份名单写法相同的 1,704 个 Polar 站，这个日期和 referring domains 记录的首次日期全部一致。花到 `--max-usd`（默认 20）就停，下次从停下的地方接着拉。只跑 `history` 会按月份、平台、类型统计卖家数；加 `--out` 把全部卖家写进 CSV。这些数据来自 DataForSEO：只用于研究，不要转载发布。
+`history pull` 读今天链着每个平台的所有站，每个站一行，带它第一次挂链接的日期：用 DataForSEO 每个域名取一条的外链，从最早的排起，每次 1,000 条（$0.06）。2026-10-14 核对过：两份名单写法相同的 1,704 个 Polar 站，这个日期和 referring domains 记录的首次日期全部一致。只有剩余额度足够支付观测到的单页价格 $0.06，才会继续请求下一页；`--max-usd` 默认 20，设为 0 不发起付费请求。服务方在请求后才返回实际费用，因此上限是估算值。下次可从停下的地方接着拉。只跑 `history` 会按月份、平台、类型统计卖家数；加 `--out` 把全部卖家写进 CSV。这些数据来自 DataForSEO：只用于研究，不要转载发布。
 
 能追溯多久，看外链数据里每月第一次链到平台的站数（2026-10-14；每个平台一次调用，$0.03）：
 
@@ -222,7 +222,7 @@ python -m radar daily --skip x,hf --out report.md  # 其余全部，每天一次
 
 `sources` 只在有新名字时才写报告。`daily` 带 `--skip x,hf` 时，会列出 `sources` 在过去 24 小时记下的线索。如果你每天只跑一次，直接用 `python -m radar daily`，什么都不跳过。
 
-其他参数：`--skip` 可选 `x,hf,breakout,sitemaps,newsites,gsc,review,judge,usecases`；`--new-sites` 让每周信号今天就跑；`--mail` 发邮件（见下）；`--state DIR` 指定数据库和快照的目录。
+其他参数：`--skip` 可选 `x,hf,breakout,sitemaps,newsites,revenue,asks,sellers,gsc,review,judge,usecases,tutorials`；`--new-sites` 让每周信号今天就跑；`--mail` 发邮件（见下）；`--state DIR` 指定数据库和快照的目录。
 
 ## 报告长什么样
 

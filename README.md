@@ -69,7 +69,7 @@ Purple, tagged NEW: what 0.3 to 0.5 added (⑥ revenue, ⑦ Reddit asks, ⑧ sel
 | Keyword table | For the day's new names: the generic search terms behind them (what people do with the new thing), each sized, checked for room on page one, and given a decision | AIsa key; [GoAnyAPI](https://goanyapi.com) key optional | about $0.18 a day for 5 names, $0.30 with GoAnyAPI |
 | Name judge | A small model scores every term: the name of one specific thing, or a common word? | AIsa key | a fraction of a cent per run |
 
-Prices are what AIsa charged in October 2026. With the example config (35 X accounts read three times a day, the keyword table for 5 names a day) a month costs about $15: $10 for the X reads, $5 for the keyword table. Read fewer accounts, or read them once a day, and it drops in proportion.
+Prices are what AIsa charged in October 2026. With the example config (35 X accounts read three times a day, the keyword table for 5 names a day, and the weekly seller signal) a month costs about $17: $10 for the X reads, $5 for the keyword table, and about $1.60 for sellers. Other paid signals add to that total. Read fewer accounts, or read them once a day, and the X cost drops in proportion.
 
 ## The keyword table
 
@@ -157,7 +157,7 @@ python -m radar history sort            # their kind, by a small model: about $0
 python -m radar history --out sellers.csv
 ```
 
-`history pull` reads every site that links to each platform today, one row per site with the day it first linked: DataForSEO's one-per-domain backlinks, oldest first, 1,000 a call ($0.06). On 2026-10-14 that day matched the referring-domain first-link day for all 1,704 Polar sites both lists name alike. It stops at `--max-usd` (default 20) and resumes where it stopped. `history` alone counts sellers per month, platform and kind; `--out` writes them all to a CSV. The rows are DataForSEO's: for research, not to republish.
+`history pull` reads every site that links to each platform today, one row per site with the day it first linked: DataForSEO's one-per-domain backlinks, oldest first, 1,000 a call ($0.06). On 2026-10-14 that day matched the referring-domain first-link day for all 1,704 Polar sites both lists name alike. It starts another page only when the remaining `--max-usd` budget (default 20) covers the observed $0.06 page price, then resumes where it stopped. The provider reports actual cost after each call, so the cap is an estimate; `--max-usd 0` makes no paid calls. `history` alone counts sellers per month, platform and kind; `--out` writes them all to a CSV. The rows are DataForSEO's: for research, not to republish.
 
 How far back it goes, from the link graph's monthly count of sites linking for the first time (2026-10-14; one call per platform, $0.03):
 
@@ -220,7 +220,7 @@ python -m radar daily --skip x,hf --out report.md  # everything else, once a day
 
 `sources` writes a report only when there is a new name. `daily` with `--skip x,hf` lists what `sources` kept in the last 24 hours. If you run only once a day, use `python -m radar daily` and skip nothing.
 
-Other flags: `--skip` takes any of `x,hf,breakout,sitemaps,newsites,gsc,review,judge,usecases`; `--new-sites` runs the weekly signal today; `--mail` sends the report (below); `--state DIR` moves the database and snapshots.
+Other flags: `--skip` takes any of `x,hf,breakout,sitemaps,newsites,revenue,asks,sellers,gsc,review,judge,usecases,tutorials`; `--new-sites` runs the weekly signal today; `--mail` sends the report (below); `--state DIR` moves the database and snapshots.
 
 ## What a report looks like
 

@@ -1221,7 +1221,7 @@ def test_history_pulls_every_page_and_picks_up_where_it_stopped(tmp_path, monkey
         return _history_page(*pages[body.get("search_after_token", "")]), 60000
     monkeypatch.setattr(seller_history.aisa, "call", call)
     db = seller_history.connect(tmp_path)
-    first = seller_history.pull(db, ["gumroad"], 50000)                        # the budget runs out after one page
+    first = seller_history.pull(db, ["gumroad"], 60000)                        # the budget runs out after one page
     assert first["platforms"]["gumroad"] == {"rows": 2, "done": False, "cost_micros": 60000, "spent_micros": 60000, "error": ""}
     rest = seller_history.pull(db, ["gumroad"], 1_000_000)
     assert sent[-1]["search_after_token"] == "t1" and rest["platforms"]["gumroad"]["done"]   # it went on from the saved token
@@ -1259,19 +1259,46 @@ def test_history_reads_sorts_and_counts(tmp_path, monkeypatch):
 def test_page_words_reads_a_gzipped_head_cut_short(monkeypatch):
     import gzip
     import random
+    import urllib.request
+    from radar.platform import http as http_module
+    from radar.platform.models import HttpResponse
+
     head = "<html><head><title>NotchLive — Live Captions</title><meta name='description' content='Captions for your Mac'>".encode()
     body = gzip.compress(head + random.Random(1).randbytes(50_000))      # noise: the stream is long and cut after 400 bytes
-
-    class Response:
-        headers = {"Content-Encoding": "gzip"}
-
-        def read(self, n):
-            return body[:n]
-
-        def __enter__(self):
-            return self
-
-        def __exit__(self, *exc):
-            return False
-    monkeypatch.setattr(sellers.urllib.request, "urlopen", lambda req, timeout: Response())
+    monkeypatch.setattr(http_module, "_default_resolver", lambda _host: ["93.184.216.34"])
+    monkeypatch.setattr(http_module, "_default_transport", lambda *_args, **_kwargs: HttpResponse(200, {"content-encoding": "gzip"}, body))
+    monkeypatch.setattr(urllib.request, "urlopen", lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("unsafe fetch")))
     assert sellers.page_words("captions-demo.app", 400) == ("NotchLive — Live Captions", "Captions for your Mac")
+
+
+def test_page_words_rejects_redirect_to_private_address(monkeypatch):
+    import urllib.request
+    from radar.platform import http as http_module
+    from radar.platform.models import HttpResponse
+
+    called = []
+
+    def transport(_method, url, _headers, _body, _timeout, pinned_ip, **_kwargs):
+        called.append((url, pinned_ip))
+        return HttpResponse(302, {"location": "https://www.captions-demo.app/"}, b"")
+
+    monkeypatch.setattr(http_module, "_default_resolver", lambda host: ["93.184.216.34" if host == "captions-demo.app" else "169.254.169.254"])
+    monkeypatch.setattr(http_module, "_default_transport", transport)
+    monkeypatch.setattr(urllib.request, "urlopen", lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("unsafe fetch")))
+    assert sellers.page_words("captions-demo.app") == ("", "")
+    assert called == [("https://captions-demo.app/", "93.184.216.34")]
+
+
+def test_history_zero_budget_makes_no_paid_calls(tmp_path, monkeypatch):
+    monkeypatch.setattr(seller_history, "page", lambda *_args: (_ for _ in ()).throw(AssertionError("paid call")))
+    assert cli.main(["history", "pull", "--max-usd", "0", "--state", str(tmp_path)]) == 0
+    budgets = []
+    monkeypatch.setattr(seller_history, "sort", lambda _db, _model, budget: budgets.append(budget) or {"step": "sort"})
+    assert cli.main(["history", "sort", "--max-usd", "0", "--state", str(tmp_path)]) == 0
+    assert budgets == [0]
+
+
+def test_history_budget_below_estimated_page_cost_makes_no_paid_calls(tmp_path, monkeypatch):
+    monkeypatch.setattr(seller_history, "page", lambda *_args: (_ for _ in ()).throw(AssertionError("paid call")))
+    got = seller_history.pull(seller_history.connect(tmp_path), ["stripe"], 10_000)
+    assert got["cost_micros"] == 0
