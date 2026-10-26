@@ -2,7 +2,7 @@
 
 ## 版本与环境
 
-- 自有基准：`origin/main` / `b74c291`；上游：`upstream/main` / `4fd9a0d`（0.5.1）；隔离工作区分支：`codex/radar-upstream-hf`。
+- 自有基准：原 `origin/main` / `b74c291`；上游：`upstream/main` / `4fd9a0d`（0.5.1）；隔离工作区分支：`codex/radar-upstream-hf`。合入后 `origin/main` 为 `d36f771`（[PR #1](https://github.com/mingjobo/new-term-radar/pull/1)）。
 - 变更范围：免费 HTTP 客户端选择地址、上游 0.5.1 代码与文档、合并冲突中的 README/打包配置。没有数据库迁移或正式环境变量变更。
 
 ## 故障根因
@@ -27,9 +27,10 @@
 - 上游合并后本地 `python3 -m pytest -q tests` → **231 passed, 36 skipped**；审查修正后同命令 → **235 passed, 36 skipped**。跳过项需要隔离 Neon 测试凭据；这次没有把本地通过说成远端数据库集成通过。
 - 卖家网页读取与预算测试先在旧实现上失败，再修复后通过；包括 gzip 截断、内网重定向、零预算、小额预算和限制下载大小。
 - `uv build --wheel` 成功；wheel 内确认包含示例配置、平台 HTTP、网页模板、数据库迁移、卖家代码。`git diff --check` 与 `git diff --cached --check` 均通过。
+- [PR 检查](https://github.com/mingjobo/new-term-radar/actions/runs/40282411452)与合入后 [main 检查](https://github.com/mingjobo/new-term-radar/actions/runs/40282631448)：Python 3.10、3.12 均成功；隔离 Neon 的 dev-integration 因仅允许旧开发分支而跳过。合入后本地重新运行全套测试仍为 **235 passed, 36 skipped**。
+- GitHub 部署记录确认 `d36f771` 的 [Vercel Production 部署](https://vercel.com/mingjobos-projects/new-term-radar/FuAzip6nwdQmn78GEoy5X5cKkEzQ) 成功。2026-10-26 约 06:56 UTC 读取正式站 `/api/settings/status`：GitHub 上次成功在 03:30 UTC，HF Models/Spaces 显示同一时段的旧失败；不能把修复后部署成功当成三源已入库。
 - 按 Yao 的技能包检查脚本评估三份上游 Skill：它们沿用上游单文件结构，缺少 `agents/interface.yaml`，且超过该脚本的 Production 初始加载预算。这是技能包发布检查的未通过项；本次只同步仓库文件，不将这些 Skill 单独安装或发布为经过 Yao 验收的技能包。
 
 ## 尚需确认
 
-- PR 检查、正式 `main` 更新与 Vercel 发布后的版本核对。
-- 修复代码进入正式运行后，下一次 `sources` 任务应在 GitHub Actions 和网页状态中三源成功；只读诊断的 200 不能代替完整入库验收。
+- 下一次 `sources` 任务应在 GitHub Actions 和网页状态中三源成功；现有调度器不重试已失败的同一时段任务，下一时段为 2026-10-26 08:00 UTC（北京时间 16:00）。只读诊断的 200 不能代替完整入库验收。

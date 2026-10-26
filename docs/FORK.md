@@ -41,6 +41,8 @@ uv run --no-project --with pytest --with markdown --with mcp python -m pytest -q
 
 2026-10-21：`radar/` 已成为唯一主包；免费 GitHub/HF 采集、竞品 Sitemap 基线/差分、Neon 最小权限、统一工作台都已在开发分支完成，并逐项记录在 [验收记录](verification/2026-10-21-unified-v1.md)。免费 Actions 工作流仍默认关闭，正式库和正式站点均未启用。Vercel 已有 `new-term-radar` 项目和 `codex/free-keyword-platform` 的历史预览，但新工作台是否已生成新预览以验收记录中的实际部署结果为准，不以本地代码完成代替上线。
 
+2026-10-26：免费工作台已在 `origin/main` 正式运行。[PR #1](https://github.com/mingjobo/new-term-radar/pull/1) 将上游 0.5.1 与 Hugging Face 双栈地址修复合入 `d36f771`，Vercel Production 部署及 Python 3.10/3.12 检查成功；三源完整入库仍须以下一个正式 `sources` 时段的 [验收记录](verification/2026-10-26-hf-upstream-sync.md) 为准。
+
 ## 旧项目边界
 
 旧项目目录为 `/Users/evan/Desktop/Code/keyword-detective`。它没有可合并的 Git 历史，本次采用有记录的文件迁入和数据兼容，而非 Git merge。不要把 `.env`、浏览器用户目录、抓取产物或历史数据库文件放进这个公开仓库。旧目录保留，数据库旧表保留。
