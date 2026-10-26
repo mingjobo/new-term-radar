@@ -9,6 +9,39 @@ permissions:
   contents: read
 
 jobs:
+  hf-network-diagnostic:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/codex/radar-upstream-hf'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Probe public Hugging Face endpoints without database access
+        run: |
+          python - <<'PY'
+          import socket
+          import urllib.request
+          from radar.platform.http import HttpClient, _default_resolver
+
+          host = "huggingface.co"
+          print("dns", _default_resolver(host), flush=True)
+          for kind in ("models", "spaces"):
+              url = f"https://{host}/api/{kind}?sort=trendingScore&direction=-1&limit=100"
+              for method in ("pinned", "urllib"):
+                  for attempt in range(2):
+                      try:
+                          if method == "pinned":
+                              response = HttpClient(allowed_hosts={host}, timeout=10).request("GET", url, headers={"Accept": "application/json", "User-Agent": "new-term-radar-free/0.1"})
+                              print(kind, method, attempt, response.status, len(response.body), flush=True)
+                          else:
+                              with urllib.request.urlopen(urllib.request.Request(url, headers={"Accept": "application/json", "User-Agent": "new-term-radar-free/0.1"}), timeout=10) as response:
+                                  print(kind, method, attempt, response.status, len(response.read()), flush=True)
+                      except Exception as exc:
+                          cause = exc.__cause__ or exc
+                          print(kind, method, attempt, type(exc).__name__, type(cause).__name__, repr(cause), flush=True)
+          PY
+
   test:
     if: github.event_name != 'workflow_dispatch'
     runs-on: ubuntu-latest
