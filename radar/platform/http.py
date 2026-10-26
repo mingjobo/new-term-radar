@@ -5,6 +5,7 @@ import http.client
 import socket
 import ssl
 from collections.abc import Callable, Iterable
+from functools import partial
 from urllib.parse import urljoin, urlsplit, urlunsplit
 
 from .models import HttpResponse
@@ -40,6 +41,9 @@ def _default_transport(
     body: bytes | None,
     timeout: float,
     pinned_ip: str,
+    *,
+    max_bytes: int = 5 * 1024 * 1024,
+    truncate: bool = False,
 ) -> HttpResponse:
     parsed = urlsplit(url)
     host = parsed.hostname
@@ -64,9 +68,11 @@ def _default_transport(
     try:
         connection.request(method, path, body=body, headers=headers)
         response = connection.getresponse()
-        payload = response.read(5 * 1024 * 1024 + 1)
-        if len(payload) > 5 * 1024 * 1024:
-            raise HttpError("response exceeds 5 MiB limit")
+        payload = response.read(max_bytes + 1)
+        if len(payload) > max_bytes:
+            if not truncate:
+                raise HttpError("response exceeds byte limit")
+            payload = payload[:max_bytes]
         return HttpResponse(
             status=int(response.status),
             headers={key.lower(): value for key, value in response.getheaders()},
@@ -87,17 +93,19 @@ class HttpClient:
         source_limit: int = 60,
         timeout: float = 30.0,
         max_redirects: int = 5,
+        max_response_bytes: int = 5 * 1024 * 1024,
+        truncate_response: bool = False,
         transport: Transport | None = None,
         resolver: Resolver | None = None,
     ) -> None:
-        if tick_limit <= 0 or source_limit <= 0:
+        if tick_limit <= 0 or source_limit <= 0 or max_response_bytes <= 0:
             raise ValueError("request limits must be positive")
         self.allowed_hosts = {host.casefold().rstrip(".") for host in allowed_hosts}
         self.tick_limit = tick_limit
         self.source_limit = source_limit
         self.timeout = timeout
         self.max_redirects = max_redirects
-        self._transport = transport or _default_transport
+        self._transport = transport or partial(_default_transport, max_bytes=max_response_bytes, truncate=truncate_response)
         self._resolver = resolver or _default_resolver
         self.tick_requests = 0
         self.source_requests = 0
@@ -127,6 +135,7 @@ class HttpClient:
             raise UnsafeUrl(f"hostname could not be resolved: {host}") from exc
         if not addresses:
             raise UnsafeUrl(f"hostname did not resolve: {host}")
+        validated = []
         for value in addresses:
             try:
                 address = ipaddress.ip_address(value)
@@ -134,7 +143,8 @@ class HttpClient:
                 raise UnsafeUrl("hostname resolved to an invalid IP address") from exc
             if not address.is_global:
                 raise UnsafeUrl(f"hostname resolves to private or unsafe address: {value}")
-        return str(ipaddress.ip_address(addresses[0]))
+            validated.append(address)
+        return str(next((address for address in validated if isinstance(address, ipaddress.IPv4Address)), validated[0]))
 
     def _spend(self) -> None:
         if self.tick_requests >= self.tick_limit:

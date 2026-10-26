@@ -5,7 +5,7 @@
     "labs": ["AnthropicAI", "claudeai", "OpenAI", "OpenAIDevs", "GoogleDeepMind", "GoogleAIStudio",
              "Alibaba_Qwen", "deepseek_ai", "Kimi_Moonshot", "MiniMax__AI", "Zai_org", "xai",
              "AIatMeta", "MistralAI", "huggingface", "cursor_ai",
-             "Kling_ai", "runwayml", "pika_labs", "LumaLabsAI", "Hailuo_AI", "higgsfield_ai", "ViduAI_official", "Alibaba_Wan", "dreamina_ai", 
+             "Kling_ai", "runwayml", "pika_labs", "LumaLabsAI", "Hailuo_AI", "higgsfield_ai", "ViduAI_official", "Alibaba_Wan", "dreamina_ai",
              "midjourney", "krea_ai"],
     "bloggers": ["dotey", "op7418", "_akhaliq", "TeksEdge", "simonw", "swyx", "karpathy", "rowancheung"]
   },
