@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "new-term-radar"
-version = "0.4.0"
+version = "0.5.1"
 description = "Names that are starting to surge in AI, and the generic search terms behind them"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -48,5 +48,6 @@ new_term_radar = "radar"
 "new_term_radar.platform.schema" = "radar/platform/schema"
 
 [tool.setuptools.package-data]
+new_term_radar = ["config.example.json"]
 "new_term_radar.platform" = ["templates/*.html", "static/*.js", "static/*.css"]
 "new_term_radar.platform.schema" = ["*.sql"]
