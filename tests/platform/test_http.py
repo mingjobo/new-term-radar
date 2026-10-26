@@ -126,6 +126,43 @@ def test_public_ip_pinned_across_redirects() -> None:
     assert transport.calls == [("https://example.com/first", "93.184.216.34")]
 
 
+def test_dual_stack_host_uses_ipv4_when_runner_cannot_route_ipv6() -> None:
+    transport = StubTransport()
+    client = HttpClient(
+        allowed_hosts={"huggingface.co"},
+        transport=transport,
+        resolver=lambda _host: ["2600:9000:288b:1600:17:b174:6d00:93a1", "3.170.185.14"],
+    )
+
+    assert client.request("GET", "https://huggingface.co/api/models").status == 200
+    assert transport.calls == [("https://huggingface.co/api/models", "3.170.185.14")]
+
+
+def test_ipv6_only_public_host_remains_supported() -> None:
+    transport = StubTransport()
+    client = HttpClient(
+        allowed_hosts={"example.com"},
+        transport=transport,
+        resolver=lambda _host: ["2600:9000:288b:1600:17:b174:6d00:93a1"],
+    )
+
+    assert client.request("GET", "https://example.com/start").status == 200
+    assert transport.calls == [("https://example.com/start", "2600:9000:288b:1600:17:b174:6d00:93a1")]
+
+
+def test_dual_stack_host_with_private_address_is_still_rejected() -> None:
+    transport = StubTransport()
+    client = HttpClient(
+        allowed_hosts={"huggingface.co"},
+        transport=transport,
+        resolver=lambda _host: ["3.170.185.14", "fc00::1"],
+    )
+
+    with pytest.raises(UnsafeUrl, match="private"):
+        client.request("GET", "https://huggingface.co/api/models")
+    assert transport.calls == []
+
+
 def test_default_transport_connects_to_pinned_ip_with_original_tls_host(monkeypatch: pytest.MonkeyPatch) -> None:
     destinations: list[tuple[str, int]] = []
     hosts: list[str] = []

@@ -127,6 +127,7 @@ class HttpClient:
             raise UnsafeUrl(f"hostname could not be resolved: {host}") from exc
         if not addresses:
             raise UnsafeUrl(f"hostname did not resolve: {host}")
+        validated = []
         for value in addresses:
             try:
                 address = ipaddress.ip_address(value)
@@ -134,7 +135,8 @@ class HttpClient:
                 raise UnsafeUrl("hostname resolved to an invalid IP address") from exc
             if not address.is_global:
                 raise UnsafeUrl(f"hostname resolves to private or unsafe address: {value}")
-        return str(ipaddress.ip_address(addresses[0]))
+            validated.append(address)
+        return str(next((address for address in validated if isinstance(address, ipaddress.IPv4Address)), validated[0]))
 
     def _spend(self) -> None:
         if self.tick_requests >= self.tick_limit:
